@@ -1,0 +1,304 @@
+import { NextFunction, Request, Response } from "express";
+import { asyncHandler } from "../utils/async-handler";
+import { Member } from "../entities/Member";
+import { Repository } from "typeorm";
+import { AppDataSource } from "../data-source";
+import { QueryBuilder } from "../utils/QueryBuilder";
+import { NotFoundError, BadRequestError } from "../errors/http.errors";
+import { QueryParams } from "../types/QueryParams";
+import { GroupMember } from "../entities/GroupMember";
+
+export class MemberController {
+  private repository: Repository<Member> = AppDataSource.getRepository(Member);
+  private groupMemberRepository: Repository<GroupMember> = AppDataSource.getRepository(GroupMember);
+  private queryBuilder: QueryBuilder<Member>;
+
+  constructor() {
+    this.queryBuilder = new QueryBuilder(this.repository, {
+      alias: "members",
+      defaultLimit: 25,
+      maxLimit: 100,
+      defaultSortBy: "createdAt",
+      defaultOrder: "DESC",
+      searchableFields: [
+        "firstName",
+        "lastName",
+        "fullNames",
+        "idNumber",
+        "phone",
+      ],
+      allowedSortFields: ["createdAt", "updatedAt", "joinedAt", "fullNames"],
+      filterableFields: [
+        "branch",
+        "gender",
+        "marriageStatus",
+        "sourceOfIncome",
+      ],
+    });
+  }
+
+  private format = (member: Member) => {
+    return {
+      ...member,
+      groups: member.groupMemberships?.map(gm => gm.group).filter(Boolean) || []
+    };
+  };
+
+  create = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      // Standardize branch ID handling
+      const branchId = req.params.branchId || req.body.branchId || req.body.branch;
+      
+      // Check if member with same ID number already exists
+      if (req.body.idNumber) {
+        const existingMember = await this.repository.findOne({
+          where: { idNumber: req.body.idNumber },
+        });
+  
+        if (existingMember) {
+          return next(
+            new BadRequestError("Member with this ID number already exists", {
+              errors: { idNumber: "Member with this ID number already exists" },
+            })
+          );
+        }
+      }
+  
+      // Generate fullNames if not provided
+      if (!req.body.fullNames && req.body.firstName && req.body.lastName) {
+        req.body.fullNames = `${req.body.firstName} ${req.body.lastName}`;
+      }
+  
+      const { groupIds, ...memberData } = req.body;
+  
+      const newMember = this.repository.create({
+        ...memberData,
+        branch: branchId ? { id: branchId } : undefined,
+      });
+      
+      // Save the member and handle the possibility of getting an array
+      const savedResult = await this.repository.save(newMember);
+      
+      // Extract the saved member, handling both single object and array cases
+      const savedMember = Array.isArray(savedResult) ? savedResult[0] : savedResult;
+      
+      if (!savedMember || !savedMember.id) {
+        return next(new BadRequestError("Failed to save member"));
+      }
+  
+      if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
+        // Filter out any empty strings
+        const validGroupIds = groupIds.filter(id => id && id.trim() !== "");
+        
+        // Create group memberships one by one to isolate any issues
+        for (const groupId of validGroupIds) {
+          try {
+            if (!groupId || isNaN(parseInt(groupId))) {
+              console.log(`Skipping invalid group ID: ${groupId}`);
+              continue;
+            }
+            
+            const groupMembership = this.groupMemberRepository.create({
+              member: { id: savedMember.id },
+              group: { id: parseInt(groupId) },
+              branch: branchId ? { id: branchId } : undefined  // Set the branch for the group membership
+            });
+            
+            await this.groupMemberRepository.save(groupMembership);
+          } catch (error) {
+            console.error(`Error creating group membership for group ${groupId}:`, error);
+          }
+        }
+      }
+      
+      // Fetch the member with relations to return complete data
+      const memberWithRelations = await this.repository.findOne({
+        where: { id: savedMember.id },
+        relations: ["branch", "groupMemberships", "groupMemberships.group"]
+      });
+
+      console.log(memberWithRelations)
+      res.status(201).json({
+        status: "success",
+        data: this.format(memberWithRelations),
+      });
+    }
+  );
+
+
+  getOne = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      const { recordId } = req.params;
+
+      const member = await this.repository.findOne({
+        where: { id: Number(recordId) },
+        relations: ["branch", "groupMemberships","groupMemberships.group"],
+      });
+
+      if (!member) {
+        return next(new NotFoundError("Member not found"));
+      }
+
+      res.status(200).json({
+        status: "success",
+        data: this.format(member),
+      });
+    }
+  );
+
+  update = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      const { recordId } = req.params;
+      const { groupIds, ...memberData } = req.body;
+  
+      let member = await this.repository.findOne({
+        where: { id: Number(recordId) },
+        relations: ["groupMemberships", "groupMemberships.group"]
+      });
+  
+      if (!member) {
+        return next(new NotFoundError("Member not found"));
+      }
+  
+      // Handle ID number uniqueness checks...
+  
+      // Update the member basic data
+      this.repository.merge(member, {
+        ...memberData,
+        branch: memberData.branchId ? { id: memberData.branchId } : member.branch
+      });
+      const updatedMember = await this.repository.save(member);
+  
+      // Update group memberships if provided
+      if (groupIds && Array.isArray(groupIds)) {
+        // Get existing group IDs
+        const existingGroupIds = member.groupMemberships.map(gm => 
+          gm.group?.id?.toString() || gm.group?.toString()
+        ).filter(Boolean);
+        
+        // Find IDs to add and remove
+        const idsToAdd = groupIds.filter(id => !existingGroupIds.includes(id));
+        const idsToRemove = existingGroupIds.filter(id => !groupIds.includes(id));
+        
+        // Add new memberships
+        for (const groupId of idsToAdd) {
+          if (!groupId || isNaN(parseInt(groupId))) continue;
+          
+          const groupMembership = this.groupMemberRepository.create({
+            member: { id: updatedMember.id },
+            group: { id: parseInt(groupId) },
+            branch: memberData.branchId ? { id: memberData.branchId } : member.branch?.id ? { id: member.branch.id } : undefined
+          });
+          
+          await this.groupMemberRepository.save(groupMembership);
+        }
+        
+        // Remove old memberships
+        for (const groupId of idsToRemove) {
+          if (!groupId) continue;
+          
+          await this.groupMemberRepository.delete({
+            member: { id: updatedMember.id },
+            group: { id: parseInt(groupId) }
+          });
+        }
+      }
+  
+      // Fetch updated member with all relations
+      const refreshedMember = await this.repository.findOne({
+        where: { id: updatedMember.id },
+        relations: ["branch", "groupMemberships", "groupMemberships.group"]
+      });
+  
+      res.status(200).json({
+        status: "success",
+        data: this.format(refreshedMember),
+      });
+    }
+  );
+
+getAll = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    // First get the base query result without relations
+    const baseResult = await this.queryBuilder.buildAndExecute(
+      req.query as QueryParams
+    );
+    
+    // Then manually fetch all members with their complete relations
+    if (baseResult.results.length > 0) {
+      const memberIds = baseResult.results.map(member => member.id);
+      
+      const membersWithRelations = await this.repository
+        .createQueryBuilder("member")
+        .leftJoinAndSelect("member.branch", "branch")
+        .leftJoinAndSelect("member.groupMemberships", "groupMemberships")
+        .leftJoinAndSelect("groupMemberships.group", "group")
+        .whereInIds(memberIds)
+        .getMany();
+      
+      // Map the members by ID for easy lookup
+      const memberMap = new Map();
+      membersWithRelations.forEach(member => {
+        memberMap.set(member.id, {
+          ...member,
+          groups: member.groupMemberships?.map(gm => gm.group).filter(Boolean) || []
+        });
+      });
+      
+      // Replace the results with the enhanced members
+      const enhancedResults = baseResult.results.map(member => 
+        memberMap.get(member.id) || member
+      );
+      
+      res.json({
+        ...baseResult,
+        results: enhancedResults.map(this.format),
+      });
+    } else {
+      res.json({
+        ...baseResult,
+        results: baseResult.results.map(this.format),
+      });
+    }
+  }
+);
+
+  delete = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      const { recordId } = req.params;
+
+      const member = await this.repository.findOne({
+        where: { id: Number(recordId) },
+        relations: ["groupMemberships", "contributions", "loans"],
+      });
+
+      if (!member) {
+        return next(new NotFoundError("Member not found"));
+      }
+
+      // Check if member has related data to prevent cascading deletion
+      if (
+        member.groupMemberships?.length ||
+        member.contributions?.length ||
+        member.loans?.length
+      ) {
+        return next(
+          new BadRequestError(
+            "Cannot delete member with group memberships, contributions, or loans"
+          )
+        );
+      }
+
+      await this.repository.remove(member);
+
+      res.status(204).json({
+        status: "success",
+        data: null,
+      });
+    }
+  );
+
+  import = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {}
+  );
+}
