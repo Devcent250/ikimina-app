@@ -26,7 +26,7 @@ import ExpensesReport from "./pages/ExpensesReport";
 import ContributionsReport from "./pages/ContributionsReport";
 import GeneralSeasonsReport from "./pages/GeneralSeasonsReport";
 import LoanReports from "./pages/LoansReport";
-import { AdminRoute, PermissionRoute } from "./components/ui/guards/RoutesGuard";
+import Districts from "./pages/Districts";
 
 const router = createBrowserRouter([
   {
@@ -63,182 +63,118 @@ const router = createBrowserRouter([
                 handle: { crumb: () => "Overview" },
               },
               {
-                // Available to all users
                 element: <Members />,
                 path: "members",
                 handle: { crumb: () => "Members" },
               },
               {
-                // Admin-only route
-                element: <AdminRoute />,
-                children: [
-                  {
-                    element: <Braches />,
-                    path: "branches",
-                    handle: { crumb: () => "Branches" },
-                  },
-                ],
+                element: <Districts />,
+                path: "districts",
+                handle: { crumb: () => "Districts" },
               },
               {
-                // Admin-only route
-                element: <AdminRoute />,
-                children: [
-                  {
-                    element: <SavingSeasons />,
-                    path: "saving-seasons",
-                    handle: { crumb: () => "Saving Seasons" },
-                  },
-                ],
+                element: <Braches />,
+                path: "branches",
+                handle: { crumb: () => "Branches" },
               },
               {
-                // Protected route with groups permission
-                element: <PermissionRoute requiredPermissions={[["groups", "read"]]} />,
-                children: [
-                  {
-                    element: <Groups />,
-                    path: "saving-groups",
-                    handle: { crumb: () => "Saving Groups" },
-                  },
-                ],
+                element: <SavingSeasons />,
+                path: "saving-seasons",
+                handle: { crumb: () => "Saving Seasons" },
               },
               {
-                // Available to all users
+                element: <Groups />,
+                path: "saving-groups",
+                handle: { crumb: () => "Saving Groups" },
+              },
+              {
                 element: <Contributions />,
                 path: "contributions",
                 handle: { crumb: () => "Contributions" },
               },
               {
-                // Available to all users
                 element: <Loans />,
                 path: "loans",
                 handle: { crumb: () => "Loans" },
               },
               {
-                // Admin-only route
-                element: <AdminRoute />,
-                children: [
-                  {
-                    element: <Fines />,
-                    path: "fines",
-                    handle: { crumb: () => "Fines" },
-                  },
-                ],
+                element: <Fines />,
+                path: "fines",
+                handle: { crumb: () => "Fines" },
               },
               {
-                // Available to all users
                 element: <Expenses />,
                 path: "expenses",
                 handle: { crumb: () => "Expenses" },
               },
               {
-                // Admin-only route
-                element: <AdminRoute />,
-                children: [
-                  {
-                    element: <Attendance />,
-                    path: "attendance",
-                    handle: { crumb: () => "attendance" },
-                  },
-                ],
+                element: <Attendance />,
+                path: "attendance",
+                handle: { crumb: () => "attendance" },
               },
             ],
           },
           {
             path: "reports",
-            element: <AdminRoute />,
+            element: <DashboardLayout />,
+            handle: { crumb: () => "Reports" },
             children: [
               {
-                element: <DashboardLayout />,
-                handle: { crumb: () => "Reports" },
-                children: [
-                  {
-                    element: <ExpensesReport />,
-                    path: "expense-reports",
-                    handle: { crumb: () => "Expenses Reports" },
-                  },
-                  {
-                    element: <ContributionsReport />,
-                    path: "contributions-reports",
-                    handle: { crumb: () => "Contributions Report" },
-                  },
-                  {
-                    element: <LoanReports />,
-                    path: "loans-reports",
-                    handle: { crumb: () => "Loans Reports" },
-                  },
-                  {
-                    element: <GeneralSeasonsReport />,
-                    path: "general-season-reports",
-                    handle: { crumb: () => "General season reports" },
-                  },
-                ],
+                element: <ExpensesReport />,
+                path: "expense-reports",
+                handle: { crumb: () => "Expenses Reports" },
+              },
+              {
+                element: <ContributionsReport />,
+                path: "contributions-reports",
+                handle: { crumb: () => "Contributions Report" },
+              },
+              {
+                element: <LoanReports />,
+                path: "loans-reports",
+                handle: { crumb: () => "Loans Reports" },
+              },
+              {
+                element: <GeneralSeasonsReport />,
+                path: "general-season-reports",
+                handle: { crumb: () => "General season reports" },
               },
             ],
           },
           {
             path: "settings",
-            element: <PermissionRoute requiredPermissions={[["roles", "read"]]} />,
+            element: <DashboardLayout />,
+            handle: { crumb: () => "Settings" },
             children: [
               {
-                element: <DashboardLayout />,
-                handle: { crumb: () => "Settings" },
-                children: [
-                  {
-                    element: <AccountSettings />,
-                    path: "account-settings",
-                    handle: { crumb: () => "Account settings" },
-                  },
-                  {
-                    element: <AdminRoute />,
-                    children: [
-                      {
-                        element: <ExpenseCategories />,
-                        path: "expense-categories",
-                        handle: { crumb: () => "Expenses Categories" },
-                      },
-                    ],
-                  },
-                  {
-                    element: <AdminRoute />,
-                    children: [
-                      {
-                        element: <PaymentMethods />,
-                        path: "payment-methods",
-                        handle: { crumb: () => "Payment Methods" },
-                      },
-                    ],
-                  },
-                  {
-                    element: <AdminRoute />,
-                    children: [
-                      {
-                        element: <SystemUsers />,
-                        path: "system-users",
-                        handle: { crumb: () => "System Users" },
-                      },
-                    ],
-                  },
-                  {
-                    element: <AdminRoute />,
-                    children: [
-                      {
-                        element: <RolesPermissions />,
-                        path: "role-permissions",
-                        handle: { crumb: () => "Roles & permissions" },
-                      },
-                    ],
-                  },
-                  {
-                    element: <AdminRoute />,
-                    children: [
-                      {
-                        element: <GeneralSettings />,
-                        path: "general-information",
-                        handle: { crumb: () => "General settings" },
-                      },
-                    ],
-                  },
-                ],
+                element: <AccountSettings />,
+                path: "account-settings",
+                handle: { crumb: () => "Account settings" },
+              },
+              {
+                element: <ExpenseCategories />,
+                path: "expense-categories",
+                handle: { crumb: () => "Expenses Categories" },
+              },
+              {
+                element: <PaymentMethods />,
+                path: "payment-methods",
+                handle: { crumb: () => "Payment Methods" },
+              },
+              {
+                element: <SystemUsers />,
+                path: "system-users",
+                handle: { crumb: () => "System Users" },
+              },
+              {
+                element: <RolesPermissions />,
+                path: "role-permissions",
+                handle: { crumb: () => "Roles & permissions" },
+              },
+              {
+                element: <GeneralSettings />,
+                path: "general-information",
+                handle: { crumb: () => "General settings" },
               },
             ],
           },

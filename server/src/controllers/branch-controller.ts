@@ -6,10 +6,12 @@ import { AppDataSource } from "../data-source";
 import { QueryBuilder } from "../utils/QueryBuilder";
 import { NotFoundError, BadRequestError } from "../errors/http.errors";
 import { QueryParams } from "../types/QueryParams";
+import { District } from "../entities/District";
 
 export class BranchController {
   private repository: Repository<Branch> = AppDataSource.getRepository(Branch);
   private queryBuilder: QueryBuilder<Branch>;
+  private districtRepository: Repository<District> = AppDataSource.getRepository(District);
 
   constructor() {
     this.queryBuilder = new QueryBuilder(this.repository, {
@@ -20,7 +22,7 @@ export class BranchController {
       defaultOrder: "DESC",
       searchableFields: ["name", "address", "description"],
       allowedSortFields: ["createdAt", "updatedAt", "name"],
-      filterableFields: [],
+      filterableFields: ["district"],
     });
   }
 
@@ -43,12 +45,24 @@ export class BranchController {
         );
       }
 
-      const newBranch = this.repository.create(req.body);
+      // Validate district
+      const district = await this.districtRepository.findOne({
+        where: { id: req.body.districtId },
+      });
+
+      if (!district) {
+        return next(new NotFoundError("District not found"));
+      }
+
+      const newBranch = this.repository.create({
+        ...req.body,
+        district,
+      });
       const savedBranch = await this.repository.save(newBranch);
 
       res.status(201).json({
         status: "success",
-        data: this.format(savedBranch[0]),
+        data: savedBranch,
       });
     }
   );

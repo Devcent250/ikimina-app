@@ -1,7 +1,7 @@
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import DataTableColumnHeader from "@/components/datatable/DataTableColumnHeader";
 import { Loader, MoreVertical, PlusCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "react-query";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -47,56 +47,177 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SearchSelect from "@/components/ui/search-select";
+import { Badge } from "@/components/ui/badge";
+import { FormDescription } from "@/components/ui/form";
+import { useAuth } from "@/context/auth.context";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { DateRange } from "react-day-picker";
+import { Calendar as CalendarIcon } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const formSchema = z.object({
-  name: z.string().min(2, "Group name must be at least 2 characters"),
-  description: z.string().min(2, "Description must be at least 2 characters"),
-  presidentId: z.number().min(1, "President is required"),
-  accountantId: z.number().min(1, "Accountant is required"),
-  secretaryId: z.number().min(1, "Secretary is required"),
-  meetingFrequency: z.enum(["Weekly", "Bi-weekly", "Monthly", "Quarterly"]),
-  location: z.string().min(2, "Location must be at least 2 characters"),
-  pricePerShare: z.string().min(0, "Price per share must be a positive number"),
-  minShares: z.string().min(1, "Minimum shares must be at least 1"),
-  maxShares: z.string().min(1, "Maximum shares must be at least 1"),
-  solidarityAmount: z
-    .string()
-    .min(0, "Solidarity Amount must be a positive number"),
-  branchId: z.string().min(1, "Branch is required"),
-});
+const formSchema = z
+  .object({
+    name: z.string().min(2, "Name must be at least 2 characters"),
+    description: z.string().optional(),
+    districtId: z.number().optional(),
+    branchId: z.number().optional(),
+    presidentId: z.number().optional(),
+    accountantId: z.number().optional(),
+    secretaryId: z.number().optional(),
+    meetingFrequency: z
+      .enum(["Weekly", "Bi-weekly", "Monthly", "Quarterly"])
+      .default("Monthly"),
+    meetingDay: z.enum([
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday",
+    ]),
+    meetingStartTime: z
+      .string()
+      .regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:mm)"),
+    meetingEndTime: z
+      .string()
+      .regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:mm)"),
+    meetingLocation: z.string().min(1, "Meeting location is required"),
+    meetingLocationDetails: z.string().optional(),
+    isActive: z.boolean().default(true),
+    pricePerShare: z.number().positive(),
+    minShares: z.number().min(0),
+    maxShares: z.number().min(1),
+    solidarityAmount: z.number().min(0),
+    additionalNotes: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      const start = new Date(`2000-01-01T${data.meetingStartTime}`);
+      const end = new Date(`2000-01-01T${data.meetingEndTime}`);
+      return end > start;
+    },
+    {
+      message: "End time must be after start time",
+      path: ["meetingEndTime"],
+    }
+  );
 
 function GroupForm({ isOpen, setIsOpen, refetch, record }) {
+  const { user } = useAuth();
+  const isAdmin = user?.isAdmin;
+  const [selectedDistrict, setSelectedDistrict] = useState(null);
+  const [districtBranches, setDistrictBranches] = useState([]);
+
+  // Fetch districts
+  const districtsQuery = useQuery({
+    queryKey: ["districts"],
+    queryFn: async () => {
+      const { data } = await api.get("/districts");
+      return data.results;
+    },
+  });
+
+  // Fetch all branches
+  const allBranchesQuery = useQuery({
+    queryKey: ["all-branches"],
+    queryFn: async () => {
+      const { data } = await api.get("/branches");
+      return data.results;
+    },
+  });
+
+  // Fetch branches for selected district
+  const districtBranchesQuery = useQuery({
+    queryKey: ["district-branches", selectedDistrict],
+    queryFn: async () => {
+      if (!selectedDistrict) return [];
+      const { data } = await api.get(`/districts/${selectedDistrict}`);
+      return data.branches || [];
+    },
+    enabled: !!selectedDistrict,
+  });
+
+  // Update branches when district changes
+  useEffect(() => {
+    if (selectedDistrict) {
+      if (districtBranchesQuery.data) {
+        setDistrictBranches(districtBranchesQuery.data);
+      }
+    } else {
+      setDistrictBranches(allBranchesQuery.data || []);
+    }
+  }, [selectedDistrict, districtBranchesQuery.data, allBranchesQuery.data]);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     values: record
       ? {
           ...record,
-          pricePerShare: record.pricePerShare?.toString(),
-          minShares: record.minShares?.toString(),
-          maxShares: record.maxShares?.toString(),
-          solidarityAmount: record.solidarityAmount?.toString(),
-          branchId: record.branchId?.toString(),
+          districtId: record.branch?.districtId,
+          pricePerShare: Number(record.pricePerShare),
+          minShares: Number(record.minShares),
+          maxShares: Number(record.maxShares),
+          solidarityAmount: Number(record.solidarityAmount),
         }
       : {
           name: "",
           description: "",
-          presidentId: "",
-          accountantId: "",
-          secretaryId: "",
-          branchId: "",
-          meetingFrequency: "",
-          location: "",
-          pricePerShare: "",
-          minShares: "",
-          maxShares: "",
-          solidarityAmount: "",
+          districtId: undefined,
+          branchId: undefined,
+          presidentId: undefined,
+          accountantId: undefined,
+          secretaryId: undefined,
+          meetingFrequency: "Monthly",
+          meetingDay: undefined,
+          meetingStartTime: "",
+          meetingEndTime: "",
+          meetingLocation: "",
+          meetingLocationDetails: "",
+          isActive: true,
+          pricePerShare: 0,
+          minShares: 0,
+          maxShares: 1,
+          solidarityAmount: 0,
+          additionalNotes: "",
         },
   });
 
+  // Calculate duration when times change
+  const calculateDuration = (startTime: string, endTime: string) => {
+    if (!startTime || !endTime) return 0;
+    const start = new Date(`2000-01-01T${startTime}`);
+    const end = new Date(`2000-01-01T${endTime}`);
+    return Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+  };
+
   function onSubmit(values: z.infer<typeof formSchema>) {
+    const duration = calculateDuration(
+      values.meetingStartTime,
+      values.meetingEndTime
+    );
+    const payload = {
+      ...values,
+      meetingDurationMinutes: duration,
+    };
+
     const q = record
-      ? api.patch(`/groups/${record.id}`, values)
-      : api.post("/groups", values);
+      ? api.patch(`/groups/${record.id}`, payload)
+      : api.post("/groups", payload);
+
     return q
       .then(() => {
         refetch();
@@ -110,7 +231,6 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
         toast.error(e.response?.data?.message || e.message);
         const errors = e?.response?.data?.meta?.errors || {};
         Object.keys(errors)?.forEach((field: any) => {
-          console.log(field, errors[field]);
           form.setError(field, {
             message: errors[field],
           });
@@ -123,19 +243,11 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
     return data.results;
   });
 
-  const { data: branches } = useQuery(["branches"], async () => {
-    const { data } = await api.get("/branches");
-    return data.results;
-  });
-
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetContent className="w-full flex flex-col !gap-0 sm:max-w-2xl p-0 md:max-w-3xl lg:max-w-2xl overflow-y-auto">
         <SheetHeader className="border-b px-4 py-2.5">
-          <SheetTitle
-            onClick={() => console.log(form.getValues())}
-            className="text-[15px]"
-          >
+          <SheetTitle className="text-[15px]">
             {record ? "Update Group" : "Add New Group"}
           </SheetTitle>
         </SheetHeader>
@@ -145,24 +257,119 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
               onSubmit={form.handleSubmit(onSubmit)}
               className="space-y-8 py-3 px-4"
             >
-              <div className="space-y-2">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field, fieldState }) => (
-                    <FormItem>
-                      <FormLabel>Group Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Enter group name"
-                          error={fieldState?.error?.message}
-                          {...field}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-gray-500">
+                  Basic Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field, fieldState }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Group Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Enter group name"
+                            error={fieldState?.error?.message}
+                            {...field}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="districtId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>District</FormLabel>
+                        <Select
+                          onValueChange={(value) => {
+                            field.onChange(
+                              value === "all" ? undefined : Number(value)
+                            );
+                            setSelectedDistrict(
+                              value === "all" ? null : Number(value)
+                            );
+                            form.setValue("branchId", undefined);
+                          }}
+                          value={field.value?.toString() || "all"}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select district" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="all">All Districts</SelectItem>
+                            {districtsQuery.data?.map((district) => (
+                              <SelectItem
+                                key={district.id}
+                                value={district.id.toString()}
+                              >
+                                {district.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="branchId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Branch</FormLabel>
+                        <Select
+                          onValueChange={(value) =>
+                            field.onChange(Number(value))
+                          }
+                          value={field.value?.toString()}
+                          disabled={districtBranchesQuery.isLoading}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue
+                                placeholder={
+                                  districtBranchesQuery.isLoading
+                                    ? "Loading branches..."
+                                    : "Select branch"
+                                }
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {districtBranches.length === 0 ? (
+                              <div className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none text-muted-foreground">
+                                {selectedDistrict
+                                  ? "No branches found in this district"
+                                  : "No branches available"}
+                              </div>
+                            ) : (
+                              districtBranches.map((branch) => (
+                                <SelectItem
+                                  key={branch.id}
+                                  value={branch.id.toString()}
+                                >
+                                  {branch.name}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <h3 className="text-sm font-medium text-gray-500">
+                  Group Officers
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="presidentId"
@@ -172,23 +379,22 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
                         <FormControl>
                           <SearchSelect
                             error={fieldState?.error?.message}
-                            options={members.map((e) => {
-                              return {
+                            options={
+                              members?.map((e: any) => ({
                                 label: e.fullNames,
                                 value: e.id,
-                              };
-                            })}
-                            value={field?.value}
-                            setValue={(value) => {
-                              field.onChange(value);
-                            }}
-                            placeholder={"Select president"}
+                              })) || []
+                            }
+                            value={field.value}
+                            setValue={(value: number) => field.onChange(value)}
+                            placeholder="Select president"
                           />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+
                   <FormField
                     control={form.control}
                     name="accountantId"
@@ -198,23 +404,22 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
                         <FormControl>
                           <SearchSelect
                             error={fieldState?.error?.message}
-                            options={members.map((e) => {
-                              return {
+                            options={
+                              members?.map((e: any) => ({
                                 label: e.fullNames,
                                 value: e.id,
-                              };
-                            })}
-                            value={field?.value}
-                            setValue={(value) => {
-                              field.onChange(value);
-                            }}
-                            placeholder={"Select accountant"}
+                              })) || []
+                            }
+                            value={field.value}
+                            setValue={(value: number) => field.onChange(value)}
+                            placeholder="Select accountant"
                           />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+
                   <FormField
                     control={form.control}
                     name="secretaryId"
@@ -224,117 +429,197 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
                         <FormControl>
                           <SearchSelect
                             error={fieldState?.error?.message}
-                            options={members.map((e) => {
-                              return {
+                            options={
+                              members?.map((e: any) => ({
                                 label: e.fullNames,
                                 value: e.id,
-                              };
-                            })}
-                            value={field?.value}
-                            setValue={(value) => {
-                              field.onChange(value);
-                            }}
-                            placeholder={"Select secretary"}
+                              })) || []
+                            }
+                            value={field.value}
+                            setValue={(value: number) => field.onChange(value)}
+                            placeholder="Select secretary"
                           />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                </div>
 
+                <h3 className="text-sm font-medium text-gray-500">
+                  Meeting Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="meetingFrequency"
-                    render={({ field, fieldState }) => (
+                    render={({ field }) => (
                       <FormItem>
                         <FormLabel>Meeting Frequency</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select frequency" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Weekly">Weekly</SelectItem>
+                            <SelectItem value="Bi-weekly">Bi-weekly</SelectItem>
+                            <SelectItem value="Monthly">Monthly</SelectItem>
+                            <SelectItem value="Quarterly">Quarterly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="meetingDay"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Meeting Day</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select day" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Monday">Monday</SelectItem>
+                            <SelectItem value="Tuesday">Tuesday</SelectItem>
+                            <SelectItem value="Wednesday">Wednesday</SelectItem>
+                            <SelectItem value="Thursday">Thursday</SelectItem>
+                            <SelectItem value="Friday">Friday</SelectItem>
+                            <SelectItem value="Saturday">Saturday</SelectItem>
+                            <SelectItem value="Sunday">Sunday</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="meetingStartTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start Time</FormLabel>
                         <FormControl>
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger error={fieldState?.error?.message}>
-                                <SelectValue placeholder="Select frequency" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="Weekly">Weekly</SelectItem>
-                              <SelectItem value="Bi-weekly">
-                                Bi-weekly
-                              </SelectItem>
-                              <SelectItem value="Monthly">Monthly</SelectItem>
-                              <SelectItem value="Quarterly">
-                                Quarterly
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Input type="time" {...field} />
                         </FormControl>
                       </FormItem>
                     )}
                   />
+
                   <FormField
                     control={form.control}
-                    name="location"
-                    render={({ field, fieldState }) => (
+                    name="meetingEndTime"
+                    render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Location</FormLabel>
+                        <FormLabel>End Time</FormLabel>
                         <FormControl>
-                          <Input
-                            placeholder="Enter location"
-                            error={fieldState?.error?.message}
+                          <Input type="time" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="meetingLocation"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Meeting Location</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="meetingLocationDetails"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Location Details (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Additional details about the meeting location..."
                             {...field}
                           />
                         </FormControl>
                       </FormItem>
                     )}
                   />
+                </div>
+
+                <h3 className="text-sm font-medium text-gray-500">
+                  Share Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="pricePerShare"
-                    render={({ field, fieldState }) => (
+                    render={({ field }) => (
                       <FormItem>
                         <FormLabel>Price Per Share</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
-                            placeholder="Enter price per share"
-                            error={fieldState?.error?.message}
+                            min={0}
+                            step={100}
                             {...field}
+                            onChange={(e) =>
+                              field.onChange(Number(e.target.value))
+                            }
                           />
                         </FormControl>
                       </FormItem>
                     )}
                   />
+
                   <FormField
                     control={form.control}
                     name="minShares"
-                    render={({ field, fieldState }) => (
+                    render={({ field }) => (
                       <FormItem>
                         <FormLabel>Minimum Shares</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
-                            placeholder="Enter minimum shares"
-                            error={fieldState?.error?.message}
+                            min={0}
                             {...field}
+                            onChange={(e) =>
+                              field.onChange(Number(e.target.value))
+                            }
                           />
                         </FormControl>
                       </FormItem>
                     )}
                   />
+
                   <FormField
                     control={form.control}
                     name="maxShares"
-                    render={({ field, fieldState }) => (
+                    render={({ field }) => (
                       <FormItem>
                         <FormLabel>Maximum Shares</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
-                            placeholder="Enter maximum shares"
-                            error={fieldState?.error?.message}
+                            min={1}
                             {...field}
+                            onChange={(e) =>
+                              field.onChange(Number(e.target.value))
+                            }
                           />
                         </FormControl>
                       </FormItem>
@@ -344,63 +629,79 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
                   <FormField
                     control={form.control}
                     name="solidarityAmount"
-                    render={({ field, fieldState }) => (
+                    render={({ field }) => (
                       <FormItem>
                         <FormLabel>Solidarity Amount</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
-                            placeholder="Enter solidarity amount"
-                            error={fieldState?.error?.message}
+                            min={0}
+                            step={100}
                             {...field}
+                            onChange={(e) =>
+                              field.onChange(Number(e.target.value))
+                            }
                           />
                         </FormControl>
                       </FormItem>
                     )}
                   />
+                </div>
+
+                <h3 className="text-sm font-medium text-gray-500">
+                  Additional Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="branchId"
-                    render={({ field, fieldState }) => (
-                      <FormItem>
-                        <FormLabel>Branch</FormLabel>
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Description</FormLabel>
                         <FormControl>
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field?.value?.toString()}
-                          >
-                            <FormControl>
-                              <SelectTrigger error={fieldState?.error?.message}>
-                                <SelectValue placeholder="Select branch" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {branches?.map((e) => (
-                                <SelectItem key={e.id} value={e.id?.toString()}>
-                                  {e.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Textarea
+                            placeholder="Enter group description..."
+                            {...field}
+                          />
                         </FormControl>
-                        <FormMessage />
                       </FormItem>
                     )}
                   />
 
                   <FormField
                     control={form.control}
-                    name="description"
-                    render={({ field, fieldState }) => (
+                    name="additionalNotes"
+                    render={({ field }) => (
                       <FormItem className="col-span-2">
-                        <FormLabel>Description</FormLabel>
+                        <FormLabel>Additional Notes</FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Enter description"
-                            error={fieldState?.error?.message}
+                            placeholder="Any additional information about the group..."
                             {...field}
                           />
                         </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="isActive"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2 flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Active Group</FormLabel>
+                          <FormDescription>
+                            Is this group currently active and accepting new
+                            members?
+                          </FormDescription>
+                        </div>
                       </FormItem>
                     )}
                   />
@@ -410,7 +711,7 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
           </Form>
         </ScrollArea>
 
-        <SheetFooter className="mt-6 border-t px-3 py-2.5 ">
+        <SheetFooter className="mt-auto border-t px-3 py-2.5">
           <Button
             type="button"
             variant="outline"
@@ -441,6 +742,62 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
 
 export default function Groups() {
   const [recordToEdit, setRecordToEdit] = useState(undefined);
+  const [searchText, setSearchText] = useState("");
+  const [columnFilters, setColumnFilters] = useState([]);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: undefined,
+    to: undefined,
+  });
+  const [sorting, setSorting] = useState([
+    {
+      id: "createdAt",
+      desc: true,
+    },
+  ]);
+
+  // Add separate queries for filter options
+  const { data: branches = [] } = useQuery(["branches"], async () => {
+    const { data } = await api.get("/branches");
+    return data.results.map((branch) => ({
+      label: branch.name,
+      value: branch.name,
+    }));
+  });
+
+  const { data: districts = [] } = useQuery(["districts"], async () => {
+    const { data } = await api.get("/districts");
+    return data.results.map((district) => ({
+      label: district.name,
+      value: district.name,
+    }));
+  });
+
+  // Add meeting frequency options
+  const meetingFrequencyOptions = [
+    { label: "Weekly", value: "Weekly" },
+    { label: "Bi-weekly", value: "Bi-weekly" },
+    { label: "Monthly", value: "Monthly" },
+    { label: "Quarterly", value: "Quarterly" },
+  ];
+
+  // Add a function to handle date range changes
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    setDateRange(range);
+    if (range?.from && range?.to) {
+      setColumnFilters((prev) => {
+        const otherFilters = prev.filter((f) => f.id !== "createdAt");
+        return [
+          ...otherFilters,
+          {
+            id: "createdAt",
+            value: [range.from, range.to],
+          },
+        ];
+      });
+    } else {
+      setColumnFilters((prev) => prev.filter((f) => f.id !== "createdAt"));
+    }
+  };
 
   const columns: ColumnDef<any>[] = [
     {
@@ -470,7 +827,19 @@ export default function Groups() {
       enableSorting: false,
       enableHiding: false,
     },
-
+    {
+      accessorKey: "id",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="ID" />
+      ),
+      cell: ({ row }) => {
+        return (
+          <div className="flex items-center gap-3">#{row.getValue("id")}</div>
+        );
+      },
+      enableSorting: true,
+      enableHiding: false,
+    },
     {
       accessorKey: "name",
       header: ({ column }) => (
@@ -494,9 +863,12 @@ export default function Groups() {
         <DataTableColumnHeader column={column} title="President" />
       ),
       cell: ({ row }) => {
+        const president = row.getValue("president") as {
+          fullNames?: string;
+        } | null;
         return (
           <div className="flex items-center gap-3">
-            {row.getValue("president")}
+            {president?.fullNames || "Not assigned"}
           </div>
         );
       },
@@ -509,9 +881,12 @@ export default function Groups() {
         <DataTableColumnHeader column={column} title="Accountant" />
       ),
       cell: ({ row }) => {
+        const accountant = row.getValue("accountant") as {
+          fullNames?: string;
+        } | null;
         return (
           <div className="flex items-center gap-3">
-            {row.getValue("accountant")}
+            {accountant?.fullNames || "Not assigned"}
           </div>
         );
       },
@@ -524,9 +899,12 @@ export default function Groups() {
         <DataTableColumnHeader column={column} title="Secretary" />
       ),
       cell: ({ row }) => {
+        const secretary = row.getValue("secretary") as {
+          fullNames?: string;
+        } | null;
         return (
           <div className="flex items-center gap-3">
-            {row.getValue("secretary")}
+            {secretary?.fullNames || "Not assigned"}
           </div>
         );
       },
@@ -539,9 +917,10 @@ export default function Groups() {
         <DataTableColumnHeader column={column} title="Price Per Share" />
       ),
       cell: ({ row }) => {
+        const value = row.getValue("pricePerShare");
         return (
           <div className="flex items-center gap-3">
-            {row.getValue("pricePerShare").toLocaleString()} FRW
+            {(value || 0).toLocaleString()} FRW
           </div>
         );
       },
@@ -554,9 +933,10 @@ export default function Groups() {
         <DataTableColumnHeader column={column} title="Solidarity Amount" />
       ),
       cell: ({ row }) => {
+        const value = row.getValue("solidarityAmount");
         return (
           <div className="flex items-center gap-3">
-            {row.getValue("solidarityAmount").toLocaleString()} FRW
+            {(value || 0).toLocaleString()} FRW
           </div>
         );
       },
@@ -569,14 +949,45 @@ export default function Groups() {
         <DataTableColumnHeader column={column} title="Members" />
       ),
       cell: ({ row }) => {
+        const value = row.getValue("members");
         return (
           <div className="flex items-center gap-3">
-            {row.getValue("members").toLocaleString()}
+            {(value || 0).toLocaleString()}
           </div>
         );
       },
       enableSorting: false,
       enableHiding: false,
+    },
+    {
+      accessorKey: "meetingDay",
+      header: "Meeting Day",
+    },
+    {
+      accessorKey: "meetingStartTime",
+      header: "Start Time",
+    },
+    {
+      accessorKey: "meetingEndTime",
+      header: "End Time",
+    },
+    {
+      accessorKey: "meetingDurationMinutes",
+      header: "Duration",
+      cell: ({ row }) => `${row.original.meetingDurationMinutes} minutes`,
+    },
+    {
+      accessorKey: "meetingLocation",
+      header: "Location",
+    },
+    {
+      accessorKey: "isActive",
+      header: "Status",
+      cell: ({ row }) => (
+        <Badge variant={row.original.isActive ? "default" : "secondary"} className={`${row.original.isActive ? "bg-green-100 text-green-600":"bg-red-100 text-red-600"} font-light shadow-none`}>
+          {row.original.isActive ? "Active" : "Inactive"}
+        </Badge>
+      ),
     },
     {
       id: "actions",
@@ -594,6 +1005,14 @@ export default function Groups() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => {
+                  setSelectedGroup(row.original);
+                  setIsViewDialogOpen(true);
+                }}
+              >
+                View Details
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
                   setRecordToEdit(row?.original);
@@ -614,15 +1033,6 @@ export default function Groups() {
       ),
     },
   ];
-
-  const [searchText, setSearchText] = useState("");
-  const [columnFilters, setColumnFilters] = useState([]);
-  const [sorting, setSorting] = useState([
-    {
-      id: "createdAt",
-      desc: true,
-    },
-  ]);
 
   const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -645,37 +1055,63 @@ export default function Groups() {
     ],
     keepPreviousData: true,
     queryFn: async () => {
-      const { data } = await api.get(`/groups`, {
-        params: {
-          page_size: pageSize,
-          page: pageIndex + 1,
-          ...(searchText && { search: searchText }),
-          filters: [
-            ...columnFilters.map((e) => {
+      console.log("Current filters:", columnFilters);
+
+      const params = {
+        page_size: pageSize,
+        page: pageIndex + 1,
+        ...(searchText && { search: searchText }),
+        ...(columnFilters.length > 0 && {
+          filters: columnFilters.map((filter) => {
+            // Map the filter field to the correct relation name
+            const fieldMap = {
+              branch: "branch.name",
+              meetingFrequency: "meetingFrequency",
+              createdAt: "createdAt",
+            };
+
+            // Handle date range filter differently
+            if (filter.id === "createdAt" && filter.value?.length === 2) {
+              const [startDate, endDate] = filter.value;
+              // Set end date to end of day
+              const endOfDay = new Date(endDate);
+              endOfDay.setHours(23, 59, 59, 999);
+
               return {
-                field: e.id,
-                operator: "in",
-                value: e.value?.map((e) => e?.value || e),
+                field: fieldMap[filter.id],
+                operator: "between",
+                value: [
+                  new Date(startDate).toISOString(),
+                  endOfDay.toISOString(),
+                ],
               };
-            }),
-          ],
-        },
-      });
+            }
+
+            return {
+              field: fieldMap[filter.id] || filter.id,
+              operator: "in",
+              value: filter.value?.map((v) => v?.value || v),
+            };
+          }),
+        }),
+        sortBy: sorting[0]?.id || "createdAt",
+        order: sorting[0]?.desc ? "DESC" : "ASC",
+      };
+
+      console.log("Final API params:", params);
+
+      const { data } = await api.get(`/groups`, { params });
+      console.log("API Response:", data);
 
       return {
-        items: data?.results.map((e) => {
-          return {
-            ...e,
-            president: e.president?.fullNames,
-            accountant: e.accountant?.fullNames,
-            secretary: e.secretary?.fullNames,
-            members: e.groupMembers?.length,
-            presidentId: e.president?.id,
-            accountantId: e.accountant?.id,
-            secretaryId: e.secretary?.id,
-            branchId: e.branch?.id,
-          };
-        }),
+        items: data?.results?.map((e) => ({
+          ...e,
+          president: e.president,
+          accountant: e.accountant,
+          secretary: e.secretary,
+          branch: e?.branch?.name,
+          createdAt: e?.createdAt,
+        })),
         totalPages: data?.totalPages,
       };
     },
@@ -695,6 +1131,23 @@ export default function Groups() {
         toast.error(e.message);
       });
   };
+
+  // Add state for selected group and dialog
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+
+  // Add query for group details
+  const groupDetailsQuery = useQuery(
+    ["group-details", selectedGroup?.id],
+    async () => {
+      if (!selectedGroup?.id) return null;
+      const { data } = await api.get(`/groups/${selectedGroup.id}`);
+      return data.data;
+    },
+    {
+      enabled: !!selectedGroup?.id,
+    }
+  );
 
   return (
     <>
@@ -717,7 +1170,42 @@ export default function Groups() {
               Groups Management
             </h2>
           </div>
-          <div className="space-x-2">
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "justify-start text-left font-normal",
+                    !dateRange && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>
+                        {format(dateRange.from, "LLL dd, y")} -{" "}
+                        {format(dateRange.to, "LLL dd, y")}
+                      </>
+                    ) : (
+                      format(dateRange.from, "LLL dd, y")
+                    )
+                  ) : (
+                    <span>Pick a date range</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={handleDateRangeChange}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
             <Button
               onClick={() => {
                 newRecordModal.open();
@@ -747,7 +1235,20 @@ export default function Groups() {
           pageSize={pageSize}
           setColumnFilters={setColumnFilters}
           columnFilters={columnFilters}
-          facets={[]}
+          facets={[
+            {
+              name: "branch",
+              title: "Branch",
+              type: "select",
+              options: branches,
+            },
+            {
+              name: "meetingFrequency",
+              title: "Meeting Frequency",
+              type: "select",
+              options: meetingFrequencyOptions,
+            },
+          ]}
         />
       </div>
 
@@ -762,6 +1263,534 @@ export default function Groups() {
         refetch={recordsQuery.refetch}
         record={recordToEdit}
       />
+
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-[95vw] md:max-w-5xl h-[90vh] md:h-[85vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="border-b px-6 py-4">
+            <DialogTitle className="text-xl font-semibold flex items-center gap-2">
+              <span>Group Details</span>
+              {groupDetailsQuery.data && (
+                <Badge
+                  variant={
+                    groupDetailsQuery.data?.isActive ? "default" : "secondary"
+                  }
+                  className={`${groupDetailsQuery.data?.isActive ? "bg-green-100 text-green-600 " : "text-red-600 bg-red-100"} font-light shadow-none`}
+                >
+                  {groupDetailsQuery.data?.isActive ? "Active" : "Inactive"}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {groupDetailsQuery.isLoading ? (
+            <div className="flex items-center justify-center p-8 h-full">
+              <Loader className="h-8 w-8 animate-spin" />
+            </div>
+          ) : groupDetailsQuery.data ? (
+            <ScrollArea className="flex-1">
+              <div className="p-4 md:p-6">
+                {/* Header Section */}
+                <div className="mb-6 bg-card rounded-lg border p-4">
+                  <h2 className="text-xl md:text-2xl font-bold mb-2">
+                    {groupDetailsQuery.data.name}
+                  </h2>
+                  <p className="text-muted-foreground">
+                    {groupDetailsQuery.data.description}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                  {/* Basic Information */}
+                  <div className="bg-card rounded-lg border p-4">
+                    <h3 className="text-base font-semibold mb-4 pb-2 border-b">
+                      Basic Information
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">
+                          Branch
+                        </span>
+                        <span className="font-medium">
+                          {groupDetailsQuery.data.branch?.name || "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">
+                          District
+                        </span>
+                        <span className="font-medium">
+                          {groupDetailsQuery.data.branch?.district?.name ||
+                            "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">
+                          Created At
+                        </span>
+                        <span className="font-medium">
+                          {new Date(
+                            groupDetailsQuery.data.createdAt
+                          ).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">
+                          Last Updated
+                        </span>
+                        <span className="font-medium">
+                          {new Date(
+                            groupDetailsQuery.data.updatedAt
+                          ).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Meeting Information */}
+                  <div className="bg-card rounded-lg border p-4">
+                    <h3 className="text-base font-semibold mb-4 pb-2 border-b">
+                      Meeting Information
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            Frequency
+                          </p>
+                          <p className="font-medium">
+                            {groupDetailsQuery.data.meetingFrequency}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Day</p>
+                          <p className="font-medium">
+                            {groupDetailsQuery.data.meetingDay}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            Start Time
+                          </p>
+                          <p className="font-medium">
+                            {groupDetailsQuery.data.meetingStartTime}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            End Time
+                          </p>
+                          <p className="font-medium">
+                            {groupDetailsQuery.data.meetingEndTime}
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Duration
+                        </p>
+                        <p className="font-medium">
+                          {groupDetailsQuery.data.meetingDurationMinutes}{" "}
+                          minutes
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Location
+                        </p>
+                        <p className="font-medium">
+                          {groupDetailsQuery.data.meetingLocation}
+                        </p>
+                      </div>
+                      {groupDetailsQuery.data.meetingLocationDetails && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            Location Details
+                          </p>
+                          <p className="text-sm">
+                            {groupDetailsQuery.data.meetingLocationDetails}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Financial Information */}
+                  <div className="bg-card rounded-lg border p-4">
+                    <h3 className="text-base font-semibold mb-4 pb-2 border-b">
+                      Financial Information
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            Price Per Share
+                          </p>
+                          <p className="font-medium">
+                            {groupDetailsQuery.data.pricePerShare.toLocaleString()}{" "}
+                            FRW
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            Solidarity Amount
+                          </p>
+                          <p className="font-medium">
+                            {groupDetailsQuery.data.solidarityAmount.toLocaleString()}{" "}
+                            FRW
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            Min Shares
+                          </p>
+                          <p className="font-medium">
+                            {groupDetailsQuery.data.minShares}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            Max Shares
+                          </p>
+                          <p className="font-medium">
+                            {groupDetailsQuery.data.maxShares}
+                          </p>
+                        </div>
+                      </div>
+                      {groupDetailsQuery.data.additionalNotes && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            Additional Notes
+                          </p>
+                          <p className="text-sm">
+                            {groupDetailsQuery.data.additionalNotes}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Group Officers */}
+                  <div className="md:col-span-2 lg:col-span-3 bg-card rounded-lg border p-4">
+                    <h3 className="text-base font-semibold mb-4 pb-2 border-b">
+                      Group Officers
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* President */}
+                      <div className="bg-accent/10 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="bg-primary/10 rounded-full p-2">
+                            <Avatar className="h-12 w-12">
+                              <AvatarFallback className="text-lg">
+                                {
+                                  groupDetailsQuery.data.president
+                                    ?.firstName?.[0]
+                                }
+                                {
+                                  groupDetailsQuery.data.president
+                                    ?.lastName?.[0]
+                                }
+                              </AvatarFallback>
+                            </Avatar>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              President
+                            </p>
+                            <p className="font-medium">
+                              {groupDetailsQuery.data.president?.fullNames ||
+                                "Not assigned"}
+                            </p>
+                          </div>
+                        </div>
+                        {groupDetailsQuery.data.president && (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">
+                                Phone:
+                              </span>
+                              <span>
+                                {groupDetailsQuery.data.president?.phone}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">ID:</span>
+                              <span>
+                                {groupDetailsQuery.data.president?.idNumber}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Accountant */}
+                      <div className="bg-accent/10 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="bg-primary/10 rounded-full p-2">
+                            <Avatar className="h-12 w-12">
+                              <AvatarFallback className="text-lg">
+                                {
+                                  groupDetailsQuery.data.accountant
+                                    ?.firstName?.[0]
+                                }
+                                {
+                                  groupDetailsQuery.data.accountant
+                                    ?.lastName?.[0]
+                                }
+                              </AvatarFallback>
+                            </Avatar>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              Accountant
+                            </p>
+                            <p className="font-medium">
+                              {groupDetailsQuery.data.accountant?.fullNames ||
+                                "Not assigned"}
+                            </p>
+                          </div>
+                        </div>
+                        {groupDetailsQuery.data.accountant && (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">
+                                Phone:
+                              </span>
+                              <span>
+                                {groupDetailsQuery.data.accountant?.phone}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">ID:</span>
+                              <span>
+                                {groupDetailsQuery.data.accountant?.idNumber}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Secretary */}
+                      <div className="bg-accent/10 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="bg-primary/10 rounded-full p-2">
+                            <Avatar className="h-12 w-12">
+                              <AvatarFallback className="text-lg">
+                                {
+                                  groupDetailsQuery.data.secretary
+                                    ?.firstName?.[0]
+                                }
+                                {
+                                  groupDetailsQuery.data.secretary
+                                    ?.lastName?.[0]
+                                }
+                              </AvatarFallback>
+                            </Avatar>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              Secretary
+                            </p>
+                            <p className="font-medium">
+                              {groupDetailsQuery.data.secretary?.fullNames ||
+                                "Not assigned"}
+                            </p>
+                          </div>
+                        </div>
+                        {groupDetailsQuery.data.secretary && (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">
+                                Phone:
+                              </span>
+                              <span>
+                                {groupDetailsQuery.data.secretary?.phone}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">ID:</span>
+                              <span>
+                                {groupDetailsQuery.data.secretary?.idNumber}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Group Members */}
+                  <div className="md:col-span-2 lg:col-span-3 bg-card rounded-lg border p-4">
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b">
+                      <h3 className="text-base font-semibold">Group Members</h3>
+                      <Badge variant="outline">
+                        {groupDetailsQuery.data.groupMembers?.length || 0}{" "}
+                        Members
+                      </Badge>
+                    </div>
+
+                    {groupDetailsQuery.data.groupMembers?.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {groupDetailsQuery.data.groupMembers
+                          ?.slice(0, 6)
+                          .map((groupMember) => {
+                            // Find the member's contribution
+                            const memberContribution =
+                              groupDetailsQuery.data.contributions?.find(
+                                (contribution) =>
+                                  contribution.member.id ===
+                                  groupMember.member.id
+                              );
+
+                            // Calculate number of shares based on deposit amount
+                            const numberOfShares = memberContribution
+                              ? Math.floor(
+                                  memberContribution.depositAmount /
+                                    groupDetailsQuery.data.pricePerShare
+                                )
+                              : 0;
+
+                            return (
+                              <div
+                                key={groupMember.id}
+                                className="bg-accent/5 border rounded-lg p-3"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="h-9 w-9">
+                                    <AvatarFallback>
+                                      {groupMember.member?.firstName?.[0]}
+                                      {groupMember.member?.lastName?.[0]}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex-1">
+                                    <p className="font-medium text-sm">
+                                      {groupMember.member?.fullNames}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {groupMember.member?.phone}
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-col items-center bg-primary/10 rounded-md px-2 py-1">
+                                    <span className="text-xs text-muted-foreground">
+                                      Shares
+                                    </span>
+                                    <span className="font-semibold">
+                                      {numberOfShares}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    ) : (
+                      <p className="text-center text-muted-foreground py-4">
+                        No members in this group yet
+                      </p>
+                    )}
+
+                    {groupDetailsQuery.data.groupMembers?.length > 6 && (
+                      <div className="mt-4 text-center">
+                        <Button variant="outline" size="sm">
+                          View all {groupDetailsQuery.data.groupMembers?.length}{" "}
+                          members
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recent Contributions */}
+                  {groupDetailsQuery.data.contributions?.length > 0 && (
+                    <div className="md:col-span-2 lg:col-span-3 bg-card rounded-lg border p-4">
+                      <div className="flex items-center justify-between mb-4 pb-2 border-b">
+                        <h3 className="text-base font-semibold">
+                          Recent Contributions
+                        </h3>
+                        <Badge variant="outline">
+                          {groupDetailsQuery.data.contributions?.length} Total
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {groupDetailsQuery.data.contributions
+                          ?.slice(0, 6)
+                          .map((contribution) => (
+                            <div
+                              key={contribution.id}
+                              className="bg-accent/5 border rounded-lg p-3"
+                            >
+                              <div className="flex justify-between items-center mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm">
+                                    {contribution.member?.fullNames ||
+                                      "Unknown Member"}
+                                  </span>
+                                </div>
+                                <Badge variant="outline" className="text-xs">
+                                  {new Date(
+                                    contribution.createdAt
+                                  ).toLocaleDateString()}
+                                </Badge>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Deposit
+                                  </p>
+                                  <p className="font-medium">
+                                    {contribution.depositAmount.toLocaleString()}{" "}
+                                    FRW
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Solidarity
+                                  </p>
+                                  <p className="font-medium">
+                                    {(
+                                      contribution.solidarityAmount || 0
+                                    ).toLocaleString()}{" "}
+                                    FRW
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+
+                      {groupDetailsQuery.data.contributions?.length > 6 && (
+                        <div className="mt-4 text-center">
+                          <Button variant="outline" size="sm">
+                            View all{" "}
+                            {groupDetailsQuery.data.contributions?.length}{" "}
+                            contributions
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </ScrollArea>
+          ) : (
+            <div className="p-8 text-center text-muted-foreground h-full flex items-center justify-center">
+              <div>
+                <p className="mb-2">No group details available</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsViewDialogOpen(false)}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

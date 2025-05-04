@@ -5,11 +5,13 @@ import {
   OneToMany,
   BaseEntity,
   ManyToOne,
+  JoinColumn,
 } from "typeorm";
 import { User } from "./User";
 import { Group } from "./Group";
 import { Member } from "./Member";
 import { GroupMember } from "./GroupMember";
+import { District } from "./District";
 
 @Entity("branches")
 export class Branch extends BaseEntity {
@@ -24,6 +26,10 @@ export class Branch extends BaseEntity {
 
   @Column({ nullable: true })
   description: string;
+
+  @ManyToOne(() => District, (district) => district.branches)
+  @JoinColumn()
+  district: District;
 
   @ManyToOne(() => User)
   users: User[];

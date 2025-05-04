@@ -1,7 +1,7 @@
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import DataTableColumnHeader from "@/components/datatable/DataTableColumnHeader";
-import { Loader, MoreVertical, PlusCircle } from "lucide-react";
-import { useState } from "react";
+import { Loader, MoreVertical, PlusCircle, Building2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useQuery } from "react-query";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -25,18 +25,19 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
 import * as z from "zod";
 import { toast } from "sonner";
 import useConfirmModal from "@/hooks/useConfirmModal";
 import ConfirmModal from "@/components/modal/ConfirmModal";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -44,44 +45,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAuth } from "@/context/auth.context";
 
 const formSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
-  address: z.string().min(2, "Address must be at least 2 characters"),
-  description: z.string().optional().nullable(),
-  districtId: z.number({
-    required_error: "Please select a district",
-  }),
+  description: z.string().optional(),
+  location: z.string().optional(),
 });
 
-function BranchForm({ isOpen, setIsOpen, refetch, record }) {
-  const { data: districts } = useQuery({
-    queryKey: ["districts"],
-    queryFn: async () => {
-      const { data } = await api.get("/districts");
-      return data.results;
-    },
-  });
+function DistrictForm({ isOpen, setIsOpen, refetch, record }) {
+  const { user } = useAuth();
+  const isAdmin = user?.isAdmin;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    values: record || {
-      name: "",
-      address: "",
-      description: "",
-      districtId: undefined,
-    },
+    values: record
+      ? {
+          ...record,
+        }
+      : {
+          name: "",
+          description: "",
+          location: "",
+        },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     const q = record
-      ? api.patch(`/branches/${record.id}`, values)
-      : api.post("/branches", values);
+      ? api.patch(`/districts/${record.id}`, values)
+      : api.post("/districts", values);
+      
     return q
       .then(() => {
         refetch();
         toast.success(
-          record ? "Branch updated successfully" : "Branch created successfully"
+          record ? "District updated successfully" : "District created successfully"
         );
         setIsOpen(false);
         form.reset();
@@ -98,88 +98,67 @@ function BranchForm({ isOpen, setIsOpen, refetch, record }) {
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-lg p-0 gap-0">
-        <DialogHeader className="border-b pb-3">
-          <DialogTitle>
-            {record ? "Update Branch" : "Add New Branch"}
-          </DialogTitle>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2 pt-3 px-3">
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="districtId"
-                  render={({ field, fieldState }) => (
-                    <FormItem>
-                      <FormLabel>District</FormLabel>
-                      <Select
-                        onValueChange={(value) => field.onChange(Number(value))}
-                        defaultValue={field.value?.toString()}
-                      >
+    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <SheetContent className="w-full flex flex-col !gap-0 sm:max-w-2xl p-0 md:max-w-3xl lg:max-w-2xl overflow-y-auto">
+        <SheetHeader className="border-b px-4 py-2.5">
+          <SheetTitle className="text-[15px]">
+            {record ? "Update District" : "Add New District"}
+          </SheetTitle>
+        </SheetHeader>
+        <ScrollArea className="h-full">
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-8 py-3 px-4"
+            >
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  District Information
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field, fieldState }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Name</FormLabel>
                         <FormControl>
-                          <SelectTrigger error={fieldState?.error?.message}>
-                            <SelectValue placeholder="Select a district" />
-                          </SelectTrigger>
+                          <Input
+                            placeholder="Enter district name"
+                            error={fieldState?.error?.message}
+                            {...field}
+                          />
                         </FormControl>
-                        <SelectContent>
-                          {districts?.map((district) => (
-                            <SelectItem
-                              key={district.id}
-                              value={district.id.toString()}
-                            >
-                              {district.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field, fieldState }) => (
-                    <FormItem>
-                      <FormLabel>Branch Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Enter branch name"
-                          error={fieldState?.error?.message}
-                          {...field}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="address"
-                  render={({ field, fieldState }) => (
-                    <FormItem>
-                      <FormLabel>Address</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Enter branch address"
-                          error={fieldState?.error?.message}
-                          {...field}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <div className="col-span-2">
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="location"
+                    render={({ field, fieldState }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Location</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Enter district location"
+                            error={fieldState?.error?.message}
+                            {...field}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
                   <FormField
                     control={form.control}
                     name="description"
                     render={({ field, fieldState }) => (
-                      <FormItem>
+                      <FormItem className="col-span-2">
                         <FormLabel>Description</FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Enter branch description"
+                            placeholder="Enter district description"
                             error={fieldState?.error?.message}
                             {...field}
                           />
@@ -189,53 +168,50 @@ function BranchForm({ isOpen, setIsOpen, refetch, record }) {
                   />
                 </div>
               </div>
-            </div>
+            </form>
+          </Form>
+        </ScrollArea>
 
-            <DialogFooter className="mt-6">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsOpen(false);
-                  form.reset();
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                disabled={
-                  form.formState.disabled || form.formState.isSubmitting
-                }
-                type="submit"
-                size="sm"
-              >
-                {form.formState.isSubmitting && (
-                  <Loader className="mr-2 h-4 w-4 text-white animate-spin" />
-                )}
-                {record ? "Update Branch" : "Add Branch"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+        <SheetFooter className="mt-auto border-t px-3 py-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setIsOpen(false);
+              form.reset();
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={form.formState.disabled || form.formState.isSubmitting}
+            type="submit"
+            size="sm"
+            onClick={form.handleSubmit(onSubmit)}
+          >
+            {form.formState.isSubmitting && (
+              <Loader className="mr-2 h-4 w-4 text-white animate-spin" />
+            )}
+            {record ? "Update District" : "Add District"}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
-export default function Braches() {
+export default function Districts() {
   const [recordToEdit, setRecordToEdit] = useState(undefined);
-  const [_, setRecordToShow] = useState(undefined);
 
   const columns: ColumnDef<any>[] = [
     {
       id: "select",
       header: ({ table }) => (
         <Checkbox
-          // @ts-ignore
           checked={
             table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
+            (table.getIsSomePageRowsSelected() ? "indeterminate" : false)
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label="Select all"
@@ -256,71 +232,107 @@ export default function Braches() {
     {
       accessorKey: "name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Name" />
+        <DataTableColumnHeader column={column} title="District Name" />
       ),
       cell: ({ row }) => {
         return (
-          <div className="capitalize flex items-center gap-3 truncate">
-            <a
-              className="cursor-pointer hover:underline"
-              onClick={() => {
-                setRecordToShow(row?.original);
-              }}
-            >
-              {row.getValue("name")}
-            </a>
+          <div className="flex items-center gap-3">
+            <Building2 className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <a href="#" className="font-medium hover:underline">
+                {row.getValue("name")}
+              </a>
+            </div>
           </div>
         );
       },
-      enableSorting: false,
+      enableSorting: true,
       enableHiding: false,
     },
     {
-      accessorKey: "address",
+      accessorKey: "location",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Address" />
+        <DataTableColumnHeader column={column} title="Location" />
       ),
       cell: ({ row }) => {
         return (
-          <div className="capitalize flex items-center gap-3 truncate">
-            {row.getValue("address")}
+          <div className="flex items-center gap-3">
+            {row.getValue("location") || "Not specified"}
           </div>
         );
       },
-      enableSorting: false,
+      enableSorting: true,
       enableHiding: false,
     },
     {
-      accessorKey: "members",
+      accessorKey: "branches",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Members" />
+        <DataTableColumnHeader column={column} title="Branches" />
       ),
       cell: ({ row }) => {
+        const branches = row.getValue("branches") as { id: number; name: string }[] | undefined;
+        
+        if (!branches || branches.length === 0) {
+          return <span className="text-muted-foreground text-sm">No branches</span>;
+        }
+        
+        const maxVisibleBadges = 2;
+        const visibleBranches = branches.slice(0, maxVisibleBadges);
+        const remainingCount = branches.length - maxVisibleBadges;
+        
         return (
-          <div className="capitalize flex items-center gap-3 truncate">
-            {row.getValue("members")?.toLocaleString()}
+          <div className="flex flex-wrap items-center gap-1.5 max-w-[200px]">
+            {visibleBranches.map((branch) => (
+              <TooltipProvider key={branch.id}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge 
+                      variant="outline" 
+                      className="bg-primary/10 text-primary hover:bg-primary/20 transition-colors px-2 py-0.5 text-xs font-normal"
+                    >
+                      {branch.name}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{branch.name}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ))}
+            
+            {remainingCount > 0 && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge 
+                      variant="secondary" 
+                      className="bg-secondary/80 hover:bg-secondary text-secondary-foreground cursor-default px-2 py-0.5 text-xs"
+                    >
+                      <PlusCircle className="h-3 w-3 mr-1" />
+                      {remainingCount} more
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="space-y-1 max-w-[200px]">
+                      <p className="font-light text-sm">Additional Branches:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {branches.slice(maxVisibleBadges).map(branch => (
+                          <Badge key={branch.id} variant="outline" className="bg-muted">
+                            {branch.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
         );
       },
       enableSorting: false,
       enableHiding: false,
     },
-    {
-      accessorKey: "groups",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Groups" />
-      ),
-      cell: ({ row }) => {
-        return (
-          <div className="capitalize flex items-center gap-3 truncate">
-            {row.getValue("groups")?.toLocaleString()}
-          </div>
-        );
-      },
-      enableSorting: false,
-      enableHiding: false,
-    },
-
     {
       id: "actions",
       header: ({ column }) => (
@@ -337,26 +349,19 @@ export default function Braches() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              {/* <DropdownMenuItem
-                onClick={() => {
-                  setRecordToShow(row?.original);
-                }}
-              >
-                View Branch Details
-              </DropdownMenuItem> */}
               <DropdownMenuItem
                 onClick={() => {
                   setRecordToEdit(row?.original);
                 }}
               >
-                Update Branch
+                Update District
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
                   confirmModal.open({ meta: row?.original });
                 }}
               >
-                Delete Branch
+                Delete District
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -366,7 +371,6 @@ export default function Braches() {
   ];
 
   const [searchText, setSearchText] = useState("");
-
   const [columnFilters, setColumnFilters] = useState([]);
   const [sorting, setSorting] = useState([
     {
@@ -385,7 +389,7 @@ export default function Braches() {
 
   const recordsQuery = useQuery({
     queryKey: [
-      "branches",
+      "districts",
       {
         search: searchText,
         filter: columnFilters,
@@ -396,7 +400,7 @@ export default function Braches() {
     ],
     keepPreviousData: true,
     queryFn: async () => {
-      const { data } = await api.get(`/branches`, {
+      const { data } = await api.get(`/districts`, {
         params: {
           page_size: pageSize,
           page: pageIndex + 1,
@@ -414,10 +418,9 @@ export default function Braches() {
       });
 
       return {
-        items: data?.results?.map((e) => ({
-          ...e,
-          members: e?.members?.length,
-          groups: e?.groups?.length,
+        items: data?.results?.map((district) => ({
+          ...district,
+          branches: district.branches || [],
         })),
         totalPages: data?.totalPages,
       };
@@ -427,11 +430,11 @@ export default function Braches() {
   const handleDelete = (record) => {
     confirmModal.setIsLoading(true);
     return api
-      .delete(`/branches/${record.id}`)
+      .delete(`/districts/${record.id}`)
       .then(() => {
         recordsQuery.refetch();
         confirmModal.close();
-        toast.success("Branch deleted successfully");
+        toast.success("District deleted successfully");
       })
       .catch((e) => {
         confirmModal.setIsLoading(false);
@@ -443,7 +446,7 @@ export default function Braches() {
     <>
       <ConfirmModal
         title={"Are you sure you want to delete?"}
-        description={`This will permanently delete the supplier and cannot be undone.`}
+        description={`This will permanently delete the district and cannot be undone.`}
         meta={confirmModal.meta}
         onConfirm={(meta) => {
           handleDelete(meta);
@@ -457,7 +460,7 @@ export default function Braches() {
         <div className="flex items-center justify-between space-y-2- my-3">
           <div className="flex items-start gap-2 flex-col">
             <h2 className="text-[16px] font-semibold tracking-tight">
-              Branches Management
+              Districts Management
             </h2>
           </div>
           <div className="space-x-2">
@@ -468,7 +471,7 @@ export default function Braches() {
               size="sm"
             >
               <PlusCircle size={16} className="mr-2" />
-              <span>Add new Branch</span>
+              <span>Add new District</span>
             </Button>
           </div>
         </div>
@@ -494,7 +497,7 @@ export default function Braches() {
         />
       </div>
 
-      <BranchForm
+      <DistrictForm
         isOpen={newRecordModal.isOpen || Boolean(recordToEdit)}
         setIsOpen={(e) => {
           newRecordModal.setisOpen(e);
@@ -507,4 +510,4 @@ export default function Braches() {
       />
     </>
   );
-}
+} 

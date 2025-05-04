@@ -51,7 +51,7 @@ export class ContributionController {
       const {
         groupMemberId,
         depositAmount,
-        contributionType,
+        solidarityAmount,
         paymentMethodId,
         receivedById,
         branchId,
@@ -113,23 +113,15 @@ export class ContributionController {
 
       let beforeSavingAmount = 0;
       let beforeSolidalityAmount = 0;
-      let currentSavingAmount = 0;
-      let currentSolidalityAmount = 0;
 
       if (lastContribution) {
         beforeSavingAmount = lastContribution.currentSavingAmount;
         beforeSolidalityAmount = lastContribution.currentSolidalityAmount;
       }
 
-      // Update current amounts based on contribution type
-      if (contributionType === "Saving") {
-        currentSavingAmount = beforeSavingAmount + Number(depositAmount);
-        currentSolidalityAmount = beforeSolidalityAmount;
-      } else {
-        currentSavingAmount = beforeSavingAmount;
-        currentSolidalityAmount =
-          beforeSolidalityAmount + Number(depositAmount);
-      }
+      // Calculate new amounts
+      const currentSavingAmount = beforeSavingAmount + Number(depositAmount);
+      const currentSolidalityAmount = beforeSolidalityAmount + Number(solidarityAmount);
 
       // Create new contribution
       const newContribution = this.repository.create({
@@ -137,7 +129,7 @@ export class ContributionController {
         groupMember,
         season: currentSeason,
         depositAmount,
-        contributionType,
+        solidarityAmount,
         currentSavingAmount,
         currentSolidalityAmount,
         beforeSavingAmount,
@@ -191,9 +183,10 @@ export class ContributionController {
       const {
         groupMemberId,
         depositAmount,
-        contributionType,
-        groupId,
+        solidarityAmount,
         paymentMethodId,
+        receivedById,
+        branchId,
       } = req.body;
 
       let contribution = await this.repository.findOne({
@@ -224,16 +217,6 @@ export class ContributionController {
         contribution.groupMember = groupMember;
       }
 
-      if (groupId) {
-        const group = await AppDataSource.getRepository(Group).findOne({
-          where: { id: groupId },
-        });
-        if (!group) {
-          return next(new NotFoundError("Group not found"));
-        }
-        contribution.group = group;
-      }
-
       if (paymentMethodId) {
         const paymentMethod = await AppDataSource.getRepository(
           PaymentMethod
@@ -246,14 +229,36 @@ export class ContributionController {
         contribution.paymentMethod = paymentMethod;
       }
 
-      // If deposit amount or contribution type changes, recalculate amounts
-      if (depositAmount !== undefined || contributionType !== undefined) {
+      if (receivedById) {
+        const receivedBy = await AppDataSource.getRepository(User).findOne({
+          where: { id: receivedById },
+        });
+        if (!receivedBy) {
+          return next(new NotFoundError("User not found"));
+        }
+        contribution.receivedBy = receivedBy;
+      }
+
+      if (branchId) {
+        const branch = await AppDataSource.getRepository(Branch).findOne({
+          where: { id: branchId },
+        });
+        if (!branch) {
+          return next(new NotFoundError("Branch not found"));
+        }
+        contribution.branch = branch;
+      }
+
+      // If deposit amount or solidarity amount changes, recalculate amounts
+      if (depositAmount !== undefined || solidarityAmount !== undefined) {
         const newDepositAmount =
           depositAmount !== undefined
             ? Number(depositAmount)
             : contribution.depositAmount;
-        const newContributionType =
-          contributionType || contribution.contributionType;
+        const newSolidarityAmount =
+          solidarityAmount !== undefined
+            ? Number(solidarityAmount)
+            : contribution.solidarityAmount;
 
         // Get previous contribution to get the before amounts
         const previousContribution = await this.repository
@@ -278,21 +283,13 @@ export class ContributionController {
           beforeSolidalityAmount = previousContribution.currentSolidalityAmount;
         }
 
-        // Update current amounts based on contribution type
-        if (newContributionType === "Saving") {
-          contribution.currentSavingAmount =
-            beforeSavingAmount + newDepositAmount;
-          contribution.currentSolidalityAmount = beforeSolidalityAmount;
-        } else {
-          contribution.currentSavingAmount = beforeSavingAmount;
-          contribution.currentSolidalityAmount =
-            beforeSolidalityAmount + newDepositAmount;
-        }
-
+        // Update current amounts
+        contribution.currentSavingAmount = beforeSavingAmount + newDepositAmount;
+        contribution.currentSolidalityAmount = beforeSolidalityAmount + newSolidarityAmount;
         contribution.beforeSavingAmount = beforeSavingAmount;
         contribution.beforeSolidalityAmount = beforeSolidalityAmount;
         contribution.depositAmount = newDepositAmount;
-        contribution.contributionType = newContributionType;
+        contribution.solidarityAmount = newSolidarityAmount;
       }
 
       // Update the contribution

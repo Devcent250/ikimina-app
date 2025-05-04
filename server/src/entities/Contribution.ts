@@ -36,12 +36,8 @@ export class Contribution extends BaseEntity {
   @Column("int")
   depositAmount: number;
 
-  @Column({
-    type: "enum",
-    enum: ["solidarity", "saving"],
-    default: "saving",
-  })
-  contributionType: "solidarity" | "saving";
+  @Column("int")
+  solidarityAmount: number;
 
   @Column("int")
   currentSavingAmount: number;

@@ -1,13 +1,11 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class Sh1744544599803 implements MigrationInterface {
-    name = 'Sh1744544599803'
+export class InitialMigrations1746116437111 implements MigrationInterface {
+    name = 'InitialMigrations1746116437111'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`CREATE TABLE "refresh_token" ("id" SERIAL NOT NULL, "token" character varying NOT NULL, "expiresAt" TIMESTAMP NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "userId" integer, CONSTRAINT "PK_b575dd3c21fb0831013c909e7fe" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE TABLE "roles" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "permissions" json, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_648e3f5447f725579d7d4ffdfb7" UNIQUE ("name"), CONSTRAINT "PK_c1433d71a4838793a49dcad46ab" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "user" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "first_name" character varying, "last_name" character varying, "phone" character varying, "email" character varying NOT NULL, "password" character varying, "status" character varying NOT NULL DEFAULT 'active', "profileUrl" character varying, "isAdmin" boolean NOT NULL DEFAULT false, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "roleId" integer, CONSTRAINT "UQ_e12875dfb3b1d92d7d7c5377e22" UNIQUE ("email"), CONSTRAINT "PK_cace4a159ff9f2512dd42373760" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "password_reset" ("id" SERIAL NOT NULL, "token" character varying NOT NULL, "expiresAt" TIMESTAMP NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "userId" integer, CONSTRAINT "PK_8515e60a2cc41584fa4784f52ce" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE TYPE "public"."loan_verifications_status_enum" AS ENUM('Approved', 'Rejected')`);
         await queryRunner.query(`CREATE TABLE "loan_verifications" ("id" SERIAL NOT NULL, "notes" character varying, "status" "public"."loan_verifications_status_enum" NOT NULL DEFAULT 'Approved', "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "loanId" integer, "memberId" integer, "groupMemberId" integer, CONSTRAINT "PK_83e764f295baca7cbf77e2fefad" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE TYPE "public"."fines_reason_enum" AS ENUM('Late Contribution', 'Absenteeism', 'Loan Default', 'Other')`);
@@ -28,13 +26,14 @@ export class Sh1744544599803 implements MigrationInterface {
         await queryRunner.query(`CREATE TYPE "public"."members_gender_enum" AS ENUM('Male', 'Female', 'Other')`);
         await queryRunner.query(`CREATE TYPE "public"."members_marriagestatus_enum" AS ENUM('Single', 'Married', 'Divorced', 'Widowed')`);
         await queryRunner.query(`CREATE TABLE "members" ("id" SERIAL NOT NULL, "firstName" character varying NOT NULL, "lastName" character varying NOT NULL, "fullNames" character varying NOT NULL, "gender" "public"."members_gender_enum" NOT NULL DEFAULT 'Other', "phone" character varying, "marriageStatus" "public"."members_marriagestatus_enum" NOT NULL DEFAULT 'Single', "idNumber" character varying NOT NULL, "country" character varying, "currentAddress" character varying, "joinedAt" date NOT NULL, "sourceOfIncome" character varying NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "branchId" integer, CONSTRAINT "UQ_0425019e5785b5e58dcfade4d92" UNIQUE ("idNumber"), CONSTRAINT "PK_28b53062261b996d9c99fa12404" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "branches" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "address" character varying, "description" character varying, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "usersId" integer, CONSTRAINT "UQ_8387ed27b3d4ca53ec3fc7b029c" UNIQUE ("name"), CONSTRAINT "PK_7f37d3b42defea97f1df0d19535" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "attendances" ("id" SERIAL NOT NULL, "date" date NOT NULL, "attendances" json NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "groupId" integer, CONSTRAINT "PK_483ed97cd4cd43ab4a117516b69" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE TYPE "public"."groups_meetingfrequency_enum" AS ENUM('Weekly', 'Bi-weekly', 'Monthly', 'Quarterly')`);
         await queryRunner.query(`CREATE TABLE "groups" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "description" character varying, "meetingFrequency" "public"."groups_meetingfrequency_enum" NOT NULL DEFAULT 'Monthly', "location" character varying, "pricePerShare" integer NOT NULL, "minShares" integer NOT NULL, "maxShares" integer NOT NULL, "solidarityAmount" integer NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "presidentId" integer, "accountantId" integer, "secretaryId" integer, "branchId" integer, CONSTRAINT "UQ_664ea405ae2a10c264d582ee563" UNIQUE ("name"), CONSTRAINT "PK_659d1483316afb28afd3a90646e" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "attendances" ("id" SERIAL NOT NULL, "date" date NOT NULL, "attendances" json NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "groupId" integer, CONSTRAINT "PK_483ed97cd4cd43ab4a117516b69" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "districts" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "description" character varying, "location" character varying, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_6a6fd6d258022e5576afbad90b4" UNIQUE ("name"), CONSTRAINT "PK_972a72ff4e3bea5c7f43a2b98af" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "branches" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "address" character varying, "description" character varying, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "districtId" integer, "usersId" integer, CONSTRAINT "UQ_8387ed27b3d4ca53ec3fc7b029c" UNIQUE ("name"), CONSTRAINT "PK_7f37d3b42defea97f1df0d19535" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "user" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "first_name" character varying, "last_name" character varying, "phone" character varying, "email" character varying NOT NULL, "password" character varying, "status" character varying NOT NULL DEFAULT 'active', "profileUrl" character varying, "isAdmin" boolean NOT NULL DEFAULT false, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "roleId" integer, "branchId" integer, "groupId" integer, CONSTRAINT "UQ_e12875dfb3b1d92d7d7c5377e22" UNIQUE ("email"), CONSTRAINT "PK_cace4a159ff9f2512dd42373760" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "password_reset" ("id" SERIAL NOT NULL, "token" character varying NOT NULL, "expiresAt" TIMESTAMP NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "userId" integer, CONSTRAINT "PK_8515e60a2cc41584fa4784f52ce" PRIMARY KEY ("id"))`);
         await queryRunner.query(`ALTER TABLE "refresh_token" ADD CONSTRAINT "FK_8e913e288156c133999341156ad" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "user" ADD CONSTRAINT "FK_c28e52f758e7bbc53828db92194" FOREIGN KEY ("roleId") REFERENCES "roles"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "password_reset" ADD CONSTRAINT "FK_05baebe80e9f8fab8207eda250c" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "loan_verifications" ADD CONSTRAINT "FK_7c7e5fe85b8b72c76e43aac7a0a" FOREIGN KEY ("loanId") REFERENCES "loans"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "loan_verifications" ADD CONSTRAINT "FK_0bf7ec6cb583c4c5bb41f810f6e" FOREIGN KEY ("memberId") REFERENCES "members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "loan_verifications" ADD CONSTRAINT "FK_b59d5ef4c8519ae24ae5630d223" FOREIGN KEY ("groupMemberId") REFERENCES "group_members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
@@ -73,21 +72,31 @@ export class Sh1744544599803 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "group_members" ADD CONSTRAINT "FK_1aa8d31831c3126947e7a713c2b" FOREIGN KEY ("groupId") REFERENCES "groups"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "group_members" ADD CONSTRAINT "FK_ea782afb09083036fc57d2c0dc8" FOREIGN KEY ("branchId") REFERENCES "branches"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "members" ADD CONSTRAINT "FK_f496c330bf399940f4dce994d47" FOREIGN KEY ("branchId") REFERENCES "branches"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "branches" ADD CONSTRAINT "FK_ad73c99f92f5cefe28c7ee11137" FOREIGN KEY ("usersId") REFERENCES "user"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "attendances" ADD CONSTRAINT "FK_960f6ee431b5d708e91021fc23e" FOREIGN KEY ("groupId") REFERENCES "groups"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "groups" ADD CONSTRAINT "FK_86e7c75bc0f689d9d73fad1fd04" FOREIGN KEY ("presidentId") REFERENCES "members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "groups" ADD CONSTRAINT "FK_a00fbf08ebb5554e3fec26e3a5c" FOREIGN KEY ("accountantId") REFERENCES "members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "groups" ADD CONSTRAINT "FK_ff224acc1e3007172ccd96500cb" FOREIGN KEY ("secretaryId") REFERENCES "members"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "groups" ADD CONSTRAINT "FK_3d802bbcffd407a85b6e5a60759" FOREIGN KEY ("branchId") REFERENCES "branches"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "attendances" ADD CONSTRAINT "FK_960f6ee431b5d708e91021fc23e" FOREIGN KEY ("groupId") REFERENCES "groups"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "branches" ADD CONSTRAINT "FK_c9b5345300cae52d94cdc53533f" FOREIGN KEY ("districtId") REFERENCES "districts"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "branches" ADD CONSTRAINT "FK_ad73c99f92f5cefe28c7ee11137" FOREIGN KEY ("usersId") REFERENCES "user"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user" ADD CONSTRAINT "FK_c28e52f758e7bbc53828db92194" FOREIGN KEY ("roleId") REFERENCES "roles"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user" ADD CONSTRAINT "FK_8b17d5d91bf27d0a33fb80ade8f" FOREIGN KEY ("branchId") REFERENCES "branches"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user" ADD CONSTRAINT "FK_974590e8d8d4ceb64e30c38e051" FOREIGN KEY ("groupId") REFERENCES "groups"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "password_reset" ADD CONSTRAINT "FK_05baebe80e9f8fab8207eda250c" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "attendances" DROP CONSTRAINT "FK_960f6ee431b5d708e91021fc23e"`);
+        await queryRunner.query(`ALTER TABLE "password_reset" DROP CONSTRAINT "FK_05baebe80e9f8fab8207eda250c"`);
+        await queryRunner.query(`ALTER TABLE "user" DROP CONSTRAINT "FK_974590e8d8d4ceb64e30c38e051"`);
+        await queryRunner.query(`ALTER TABLE "user" DROP CONSTRAINT "FK_8b17d5d91bf27d0a33fb80ade8f"`);
+        await queryRunner.query(`ALTER TABLE "user" DROP CONSTRAINT "FK_c28e52f758e7bbc53828db92194"`);
+        await queryRunner.query(`ALTER TABLE "branches" DROP CONSTRAINT "FK_ad73c99f92f5cefe28c7ee11137"`);
+        await queryRunner.query(`ALTER TABLE "branches" DROP CONSTRAINT "FK_c9b5345300cae52d94cdc53533f"`);
         await queryRunner.query(`ALTER TABLE "groups" DROP CONSTRAINT "FK_3d802bbcffd407a85b6e5a60759"`);
         await queryRunner.query(`ALTER TABLE "groups" DROP CONSTRAINT "FK_ff224acc1e3007172ccd96500cb"`);
         await queryRunner.query(`ALTER TABLE "groups" DROP CONSTRAINT "FK_a00fbf08ebb5554e3fec26e3a5c"`);
         await queryRunner.query(`ALTER TABLE "groups" DROP CONSTRAINT "FK_86e7c75bc0f689d9d73fad1fd04"`);
-        await queryRunner.query(`ALTER TABLE "branches" DROP CONSTRAINT "FK_ad73c99f92f5cefe28c7ee11137"`);
+        await queryRunner.query(`ALTER TABLE "attendances" DROP CONSTRAINT "FK_960f6ee431b5d708e91021fc23e"`);
         await queryRunner.query(`ALTER TABLE "members" DROP CONSTRAINT "FK_f496c330bf399940f4dce994d47"`);
         await queryRunner.query(`ALTER TABLE "group_members" DROP CONSTRAINT "FK_ea782afb09083036fc57d2c0dc8"`);
         await queryRunner.query(`ALTER TABLE "group_members" DROP CONSTRAINT "FK_1aa8d31831c3126947e7a713c2b"`);
@@ -126,13 +135,14 @@ export class Sh1744544599803 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "loan_verifications" DROP CONSTRAINT "FK_b59d5ef4c8519ae24ae5630d223"`);
         await queryRunner.query(`ALTER TABLE "loan_verifications" DROP CONSTRAINT "FK_0bf7ec6cb583c4c5bb41f810f6e"`);
         await queryRunner.query(`ALTER TABLE "loan_verifications" DROP CONSTRAINT "FK_7c7e5fe85b8b72c76e43aac7a0a"`);
-        await queryRunner.query(`ALTER TABLE "password_reset" DROP CONSTRAINT "FK_05baebe80e9f8fab8207eda250c"`);
-        await queryRunner.query(`ALTER TABLE "user" DROP CONSTRAINT "FK_c28e52f758e7bbc53828db92194"`);
         await queryRunner.query(`ALTER TABLE "refresh_token" DROP CONSTRAINT "FK_8e913e288156c133999341156ad"`);
-        await queryRunner.query(`DROP TABLE "attendances"`);
+        await queryRunner.query(`DROP TABLE "password_reset"`);
+        await queryRunner.query(`DROP TABLE "user"`);
+        await queryRunner.query(`DROP TABLE "branches"`);
+        await queryRunner.query(`DROP TABLE "districts"`);
         await queryRunner.query(`DROP TABLE "groups"`);
         await queryRunner.query(`DROP TYPE "public"."groups_meetingfrequency_enum"`);
-        await queryRunner.query(`DROP TABLE "branches"`);
+        await queryRunner.query(`DROP TABLE "attendances"`);
         await queryRunner.query(`DROP TABLE "members"`);
         await queryRunner.query(`DROP TYPE "public"."members_marriagestatus_enum"`);
         await queryRunner.query(`DROP TYPE "public"."members_gender_enum"`);
@@ -153,8 +163,6 @@ export class Sh1744544599803 implements MigrationInterface {
         await queryRunner.query(`DROP TYPE "public"."fines_reason_enum"`);
         await queryRunner.query(`DROP TABLE "loan_verifications"`);
         await queryRunner.query(`DROP TYPE "public"."loan_verifications_status_enum"`);
-        await queryRunner.query(`DROP TABLE "password_reset"`);
-        await queryRunner.query(`DROP TABLE "user"`);
         await queryRunner.query(`DROP TABLE "roles"`);
         await queryRunner.query(`DROP TABLE "refresh_token"`);
     }

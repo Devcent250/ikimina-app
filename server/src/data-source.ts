@@ -18,12 +18,13 @@ import { PaymentMethod } from "./entities/PaymentMethod";
 import { Role } from "./entities/Role";
 import { Season } from "./entities/Season";
 import { Group } from "./entities/Group";
+import { District } from "./entities/District";
 dotenv.config();
 
 export const MIGRATION_FILES =
   process.env.NODE_ENV === "development"
-    ? ["./src/database/migrations/**/*.ts"]
-    : ["./dist/database/migrations/**/*.js"];
+    ? ["./src/database/migrations/*.ts"]
+    : ["./dist/database/migrations/*.js"];
 
 export const AppDataSource = new DataSource({
   type: "postgres",
@@ -39,6 +40,7 @@ export const AppDataSource = new DataSource({
     Fine,
     ExpenseCategory,
     Group,
+    District,
     GroupMember,
     Loan,
     LoanPayment,

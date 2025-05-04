@@ -18,11 +18,11 @@ export class AuthController {
       status: data.status,
       phone: data.phone,
       email: data.email,
-      isAdmin:data.isAdmin,
+      isAdmin: data.isAdmin,
       profileUrl: data?.profileUrl,
-      branch:data.branch,
-      role:data.role,
-      group:data.group
+      branch: data.branch,
+      role: data.role,
+      group: data.group,
     };
   };
 
@@ -34,7 +34,7 @@ export class AuthController {
         where: {
           id: user.id,
         },
-        relations: ["role", "branch", "group"]
+        relations: ["role", "branch", "group"],
       });
 
       if (!foundUser) throw new NotFoundError("User not found");
@@ -51,7 +51,8 @@ export class AuthController {
       // Find user by email
       const user = await User.findOne({
         where: { email: email },
-        select: ["id", "name", "profileUrl", "email", "password"],
+        select: ["id", "name", "profileUrl", "email", "password","role", "isAdmin"],
+        // relations: ["role", "branch", "group"],
       });
 
       if (!user) {
@@ -76,6 +77,8 @@ export class AuthController {
         email: user.email,
         name: user.name,
         profileUrl: user.profileUrl,
+        role: user.role,
+        isAdmin: user.isAdmin,
       };
 
       // Generate JWT token

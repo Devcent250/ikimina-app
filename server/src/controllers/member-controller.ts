@@ -7,10 +7,14 @@ import { QueryBuilder } from "../utils/QueryBuilder";
 import { NotFoundError, BadRequestError } from "../errors/http.errors";
 import { QueryParams } from "../types/QueryParams";
 import { GroupMember } from "../entities/GroupMember";
+import { District } from "../entities/District";
+import { Branch } from "../entities/Branch";
 
 export class MemberController {
   private repository: Repository<Member> = AppDataSource.getRepository(Member);
   private groupMemberRepository: Repository<GroupMember> = AppDataSource.getRepository(GroupMember);
+  private districtRepository: Repository<District> = AppDataSource.getRepository(District);
+  private branchRepository: Repository<Branch> = AppDataSource.getRepository(Branch);
   private queryBuilder: QueryBuilder<Member>;
 
   constructor() {
@@ -46,9 +50,6 @@ export class MemberController {
 
   create = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      // Standardize branch ID handling
-      const branchId = req.params.branchId || req.body.branchId || req.body.branch;
-      
       // Check if member with same ID number already exists
       if (req.body.idNumber) {
         const existingMember = await this.repository.findOne({
@@ -69,11 +70,35 @@ export class MemberController {
         req.body.fullNames = `${req.body.firstName} ${req.body.lastName}`;
       }
   
-      const { groupIds, ...memberData } = req.body;
+      const { groupIds, districtId, branchId, ...memberData } = req.body;
+
+      // Validate district exists
+      const district = await this.districtRepository.findOne({
+        where: { id: districtId },
+        relations: ["branches"]
+      });
+
+      if (!district) {
+        return next(new NotFoundError("District not found"));
+      }
+
+      // If branchId is provided, validate it belongs to the district
+      let branch: Branch | undefined;
+      if (branchId) {
+        branch = district.branches.find(b => b.id === branchId);
+        if (!branch) {
+          return next(new BadRequestError("Selected branch does not belong to the selected district"));
+        }
+      } else if (district.branches.length > 0) {
+        // If no branch specified, use the first branch in the district
+        branch = district.branches[0];
+      } else {
+        return next(new BadRequestError("No branches available in the selected district"));
+      }
   
       const newMember = this.repository.create({
         ...memberData,
-        branch: branchId ? { id: branchId } : undefined,
+        branch: { id: branch.id }
       });
       
       // Save the member and handle the possibility of getting an array
@@ -101,7 +126,7 @@ export class MemberController {
             const groupMembership = this.groupMemberRepository.create({
               member: { id: savedMember.id },
               group: { id: parseInt(groupId) },
-              branch: branchId ? { id: branchId } : undefined  // Set the branch for the group membership
+              branch: { id: branch.id }
             });
             
             await this.groupMemberRepository.save(groupMembership);
@@ -114,10 +139,9 @@ export class MemberController {
       // Fetch the member with relations to return complete data
       const memberWithRelations = await this.repository.findOne({
         where: { id: savedMember.id },
-        relations: ["branch", "groupMemberships", "groupMemberships.group"]
+        relations: ["branch", "branch.district", "groupMemberships", "groupMemberships.group"]
       });
 
-      console.log(memberWithRelations)
       res.status(201).json({
         status: "success",
         data: this.format(memberWithRelations),
@@ -132,16 +156,47 @@ export class MemberController {
 
       const member = await this.repository.findOne({
         where: { id: Number(recordId) },
-        relations: ["branch", "groupMemberships","groupMemberships.group"],
+        relations: [
+          "branch", 
+          "groupMemberships",
+          "groupMemberships.group",
+          "groupMemberships.group.contributions",
+          "contributions"
+        ],
       });
 
       if (!member) {
         return next(new NotFoundError("Member not found"));
       }
 
+      // Format the response to include member-specific contributions and calculate shares
+      const formattedMember = {
+        ...member,
+        groupMemberships: member.groupMemberships?.map(gm => {
+          // Find the member's contribution in this group
+          const memberContribution = gm.group.contributions?.find(
+            (contribution) => contribution.member?.id === member.id
+          );
+          
+          // Calculate number of shares based on deposit amount
+          const numberOfShares = memberContribution 
+            ? Math.floor(memberContribution.depositAmount / gm.group.pricePerShare)
+            : 0;
+
+          return {
+            ...gm,
+            numberOfShares, // Add the calculated shares
+            group: {
+              ...gm.group,
+              contributions: gm.group.contributions?.filter(c => c.member?.id === member.id) || []
+            }
+          };
+        })
+      };
+
       res.status(200).json({
         status: "success",
-        data: this.format(member),
+        data: formattedMember,
       });
     }
   );

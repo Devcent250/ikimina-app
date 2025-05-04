@@ -26,6 +26,7 @@ import loanPaymentRoutes from "./routes/loan-payment.routes";
 import attendanceRoutes from "./routes/attendances.routes";
 import expenseCategoryRoutes from "./routes/expense-category.routes";
 import expenseRoutes from "./routes/expenses.routes";
+import districtRoutes from "./routes/district.routes";
 import { authorization } from "./middleware/auth.middleware";
 import analyticsRoutes from "./routes/analytics.routes";
 
@@ -89,6 +90,7 @@ app.use("/api/loans", authorization, loanRoutes);
 app.use("/api/fines", authorization, fineRoutes);
 app.use("/api/users", authorization, userRoutes);
 app.use("/api/expenses", authorization, expenseRoutes);
+app.use("/api/districts", authorization, districtRoutes);
 app.use("/api/analytics", authorization, analyticsRoutes);
 
 // Ensure upload directory exists

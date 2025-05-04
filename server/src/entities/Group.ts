@@ -46,21 +46,46 @@ export class Group extends BaseEntity {
   })
   meetingFrequency: "Weekly" | "Bi-weekly" | "Monthly" | "Quarterly";
 
-  @Column({ nullable: true })
-  location: string;
+  @Column({
+    type: "enum",
+    enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+    nullable: true,
+  })
+  meetingDay: "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
 
-  @Column("int")
+  @Column({ type: "time", nullable: true })
+  meetingStartTime: string;
+
+  @Column({ type: "time", nullable: true })
+  meetingEndTime: string;
+
+  @Column({ nullable: true })
+  meetingLocation: string;
+
+  @Column({ nullable: true })
+  meetingLocationDetails: string;
+
+  @Column({ type: "int", nullable: true })
+  meetingDurationMinutes: number;
+
+  @Column({ type: "boolean", default: true })
+  isActive: boolean;
+
+  @Column({ type: "int" })
   pricePerShare: number;
 
-  @Column("int")
+  @Column({ type: "int" })
   minShares: number;
 
-  @Column("int")
+  @Column({ type: "int" })
   maxShares: number;
 
   // solidarity fund
-  @Column("int")
+  @Column({ type: "int" })
   solidarityAmount: number;
+
+  @Column({ nullable: true })
+  additionalNotes: string;
 
   @ManyToOne(() => Branch, (branch) => branch.groups)
   @JoinColumn()

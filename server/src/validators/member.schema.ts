@@ -17,7 +17,8 @@ export const createMemberSchema = Joi.object({
     .valid("Employment", "Business", "Farming", "Freelance", "Other")
     .required(),
   branchId: Joi.number().required(),
-  groupIds: Joi.array().items(Joi.string().required()).optional(),
+  districtId: Joi.number().required(),
+  groupIds: Joi.array().items(Joi.string()).optional().allow(null).default([])
 });
 
 export const updateMemberSchema = createMemberSchema.fork(

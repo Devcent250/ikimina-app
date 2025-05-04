@@ -53,12 +53,19 @@ export class GroupController {
         accountantId,
         secretaryId,
         meetingFrequency,
-        location,
+        meetingDay,
+        meetingStartTime,
+        meetingEndTime,
+        meetingLocation,
+        meetingLocationDetails,
+        meetingDurationMinutes,
+        isActive,
         pricePerShare,
         minShares,
         maxShares,
         branchId,
         solidarityAmount,
+        additionalNotes,
       } = req.body;
 
       // Check if group with same name exists
@@ -126,12 +133,19 @@ export class GroupController {
           accountant,
           secretary,
           meetingFrequency,
-          location,
+          meetingDay,
+          meetingStartTime,
+          meetingEndTime,
+          meetingLocation,
+          meetingLocationDetails,
+          meetingDurationMinutes,
+          isActive,
           pricePerShare,
           minShares,
           maxShares,
           branch,
           solidarityAmount,
+          additionalNotes,
         },
         req.body
       );
@@ -144,12 +158,19 @@ export class GroupController {
         accountant,
         secretary,
         meetingFrequency,
-        location,
+        meetingDay,
+        meetingStartTime,
+        meetingEndTime,
+        meetingLocation,
+        meetingLocationDetails,
+        meetingDurationMinutes,
+        isActive,
         pricePerShare,
         minShares,
         maxShares,
         branch,
         solidarityAmount,
+        additionalNotes,
       });
 
       const savedGroup = await this.repository.save(newGroup);
@@ -216,10 +237,11 @@ export class GroupController {
           "president",
           "accountant",
           "secretary",
-          "branch",
+          "branch.district",
           "groupMembers",
           "groupMembers.member",
           "contributions",
+          "contributions.member",
           "loans",
           "fines",
           "attendances",
@@ -248,12 +270,19 @@ export class GroupController {
         accountantId,
         secretaryId,
         meetingFrequency,
-        location,
+        meetingDay,
+        meetingStartTime,
+        meetingEndTime,
+        meetingLocation,
+        meetingLocationDetails,
+        meetingDurationMinutes,
+        isActive,
         pricePerShare,
         minShares,
         maxShares,
         branchId,
         solidarityAmount,
+        additionalNotes,
       } = req.body;
 
       let group = await this.repository.findOne({
@@ -342,14 +371,19 @@ export class GroupController {
       // Update fields if provided
       if (name !== undefined) group.name = name;
       if (description !== undefined) group.description = description;
-      if (meetingFrequency !== undefined)
-        group.meetingFrequency = meetingFrequency;
-      if (location !== undefined) group.location = location;
+      if (meetingFrequency !== undefined) group.meetingFrequency = meetingFrequency;
+      if (meetingDay !== undefined) group.meetingDay = meetingDay;
+      if (meetingStartTime !== undefined) group.meetingStartTime = meetingStartTime;
+      if (meetingEndTime !== undefined) group.meetingEndTime = meetingEndTime;
+      if (meetingLocation !== undefined) group.meetingLocation = meetingLocation;
+      if (meetingLocationDetails !== undefined) group.meetingLocationDetails = meetingLocationDetails;
+      if (meetingDurationMinutes !== undefined) group.meetingDurationMinutes = meetingDurationMinutes;
+      if (isActive !== undefined) group.isActive = isActive;
       if (pricePerShare !== undefined) group.pricePerShare = pricePerShare;
       if (minShares !== undefined) group.minShares = minShares;
       if (maxShares !== undefined) group.maxShares = maxShares;
-      if (solidarityAmount !== undefined)
-        group.solidarityAmount = solidarityAmount;
+      if (solidarityAmount !== undefined) group.solidarityAmount = solidarityAmount;
+      if (additionalNotes !== undefined) group.additionalNotes = additionalNotes;
 
       const updatedGroup = await this.repository.save(group);
 
