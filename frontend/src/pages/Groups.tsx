@@ -49,7 +49,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import SearchSelect from "@/components/ui/search-select";
 import { Badge } from "@/components/ui/badge";
 import { FormDescription } from "@/components/ui/form";
-import { useAuth } from "@/context/auth.context";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -66,7 +65,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const formSchema = z
   .object({
@@ -117,8 +116,6 @@ const formSchema = z
   );
 
 function GroupForm({ isOpen, setIsOpen, refetch, record }) {
-  const { user } = useAuth();
-  const isAdmin = user?.isAdmin;
   const [selectedDistrict, setSelectedDistrict] = useState(null);
   const [districtBranches, setDistrictBranches] = useState([]);
 
@@ -764,13 +761,6 @@ export default function Groups() {
     }));
   });
 
-  const { data: districts = [] } = useQuery(["districts"], async () => {
-    const { data } = await api.get("/districts");
-    return data.results.map((district) => ({
-      label: district.name,
-      value: district.name,
-    }));
-  });
 
   // Add meeting frequency options
   const meetingFrequencyOptions = [

@@ -1,6 +1,10 @@
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import DataTableColumnHeader from "@/components/datatable/DataTableColumnHeader";
-import { MoreVertical, PlusCircle, Calendar as CalendarIcon } from "lucide-react";
+import {
+  MoreVertical,
+  PlusCircle,
+  Calendar as CalendarIcon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "react-query";
 import { Button } from "@/components/ui/button";
@@ -60,7 +64,6 @@ import React from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-
 interface Member {
   id: number;
   firstName: string;
@@ -92,7 +95,9 @@ interface ContributionData {
 const formSchema = z.object({
   totalAmount: z.string().min(0, "Total amount must be a positive number"),
   depositAmount: z.string().min(0, "Deposit amount must be a positive number"),
-  solidarityAmount: z.string().min(0, "Solidarity amount must be a positive number"),
+  solidarityAmount: z
+    .string()
+    .min(0, "Solidarity amount must be a positive number"),
   groupMemberId: z.number().min(1, "Member is required"),
   groupId: z.string().min(1, "Group is required"),
   paymentMethodId: z.string().min(1, "Payment method is required"),
@@ -106,7 +111,9 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
     values: record
       ? {
           ...record,
-          totalAmount: (Number(record.depositAmount) + Number(record.solidarityAmount)).toString(),
+          totalAmount: (
+            Number(record.depositAmount) + Number(record.solidarityAmount)
+          ).toString(),
           depositAmount: record.depositAmount?.toString(),
           solidarityAmount: record.solidarityAmount?.toString(),
           groupMemberId: record.groupMemberId,
@@ -142,14 +149,14 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
 
       // Always set solidarity amount first
       form.setValue("solidarityAmount", solidarityAmount.toString());
-      
+
       // Calculate remaining amount for shares
       const remainingAmount = totalAmount - solidarityAmount;
-      
+
       // If remaining amount is positive, use it for shares
       if (remainingAmount > 0) {
         form.setValue("depositAmount", remainingAmount.toString());
-        
+
         // Calculate shares
         if (pricePerShare > 0) {
           const shares = Math.floor(remainingAmount / pricePerShare);
@@ -271,17 +278,23 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
   // Handle contribution type change
   useEffect(() => {
     const contributionType = form.getValues("contributionType");
-    
+
     if (selectedGroup && contributionType) {
       if (contributionType === "solidarity") {
         form.setValue("depositAmount", "0");
-        form.setValue("solidarityAmount", selectedGroup.solidarityAmount.toString());
+        form.setValue(
+          "solidarityAmount",
+          selectedGroup.solidarityAmount.toString()
+        );
       } else if (contributionType === "saving") {
         form.setValue("solidarityAmount", "0");
         if (form.getValues("depositAmount") === "0") {
           // Calculate default amount based on minimum shares, but cap at 10 shares
           const defaultShares = Math.min(selectedGroup.minShares, 10);
-          form.setValue("depositAmount", (selectedGroup.pricePerShare * defaultShares).toString());
+          form.setValue(
+            "depositAmount",
+            (selectedGroup.pricePerShare * defaultShares).toString()
+          );
         }
       }
     }
@@ -290,29 +303,36 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
   useEffect(() => {
     if (record && allMembers.length > 0) {
       // Find and set the selected member from allMembers
-      const member = allMembers.find(m => record.member && m.fullNames === record.member);
+      const member = allMembers.find(
+        (m) => record.member && m.fullNames === record.member
+      );
       if (member) {
         setSelectedMember(member);
       }
-      
+
       // Set the selected group
       if (record.groupId) {
-        api.get(`/groups/${record.groupId}`)
+        api
+          .get(`/groups/${record.groupId}`)
           .then(({ data }) => {
             setSelectedGroup(data.data);
           })
-          .catch(err => console.error("Error fetching group details:", err));
+          .catch((err) => console.error("Error fetching group details:", err));
       }
-      
+
       // If we have a groupMemberId, populate availableGroupMembers
       if (record.groupMemberId) {
-        api.get(`/members/${record.member?.id || member?.id}`)
+        api
+          .get(`/members/${record.member?.id || member?.id}`)
           .then(({ data }) => {
-            if (data.data.groupMemberships && data.data.groupMemberships.length > 0) {
+            if (
+              data.data.groupMemberships &&
+              data.data.groupMemberships.length > 0
+            ) {
               setAvailableGroupMembers(data.data.groupMemberships);
             }
           })
-          .catch(err => console.error("Error fetching member details:", err));
+          .catch((err) => console.error("Error fetching member details:", err));
       }
     }
   }, [record, allMembers]);
@@ -370,25 +390,34 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
 
       if (pricePerShare > 0) {
         let shares = Math.floor(depositAmount / pricePerShare);
-        
+
         // Enforce maximum shares
         if (shares > maxShares) {
           shares = maxShares;
           // Update deposit amount to match max shares
-          form.setValue("depositAmount", (maxShares * pricePerShare).toString());
+          form.setValue(
+            "depositAmount",
+            (maxShares * pricePerShare).toString()
+          );
         }
-        
+
         // Show validation for minimum shares
         if (shares < minShares) {
           toast.error(
-            `Minimum ${minShares} shares required (${minShares * pricePerShare} deposit)`
+            `Minimum ${minShares} shares required (${
+              minShares * pricePerShare
+            } deposit)`
           );
         }
-        
+
         setNumberOfShares(shares);
       }
     }
-  }, [form.watch("depositAmount"), selectedGroup, form.watch("contributionType")]);
+  }, [
+    form.watch("depositAmount"),
+    selectedGroup,
+    form.watch("contributionType"),
+  ]);
 
   // Update the getShareValidationInfo function
   const getShareValidationInfo = () => {
@@ -405,14 +434,18 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
     if (shares < minShares) {
       return {
         isValid: false,
-        message: `Minimum ${minShares} shares required (${minShares * pricePerShare} deposit)`,
+        message: `Minimum ${minShares} shares required (${
+          minShares * pricePerShare
+        } deposit)`,
       };
     }
 
     if (shares > maxShares) {
       return {
         isValid: false,
-        message: `Maximum ${maxShares} shares allowed (${maxShares * pricePerShare} deposit)`,
+        message: `Maximum ${maxShares} shares allowed (${
+          maxShares * pricePerShare
+        } deposit)`,
       };
     }
 
@@ -444,14 +477,18 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
 
       if (shares < minShares) {
         toast.error(
-          `Minimum ${minShares} shares required (${minShares * pricePerShare} deposit)`
+          `Minimum ${minShares} shares required (${
+            minShares * pricePerShare
+          } deposit)`
         );
         return;
       }
 
       if (shares > maxShares) {
         toast.error(
-          `Maximum ${maxShares} shares allowed (${maxShares * pricePerShare} deposit)`
+          `Maximum ${maxShares} shares allowed (${
+            maxShares * pricePerShare
+          } deposit)`
         );
         return;
       }
@@ -520,11 +557,15 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
               <div className="space-y-2 rounded-lg border p-3">
                 <div className="flex justify-between text-sm">
                   <span>Solidarity Amount:</span>
-                  <span className="font-medium">{form.watch("solidarityAmount")} FRW</span>
+                  <span className="font-medium">
+                    {form.watch("solidarityAmount")} FRW
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Deposit Amount:</span>
-                  <span className="font-medium">{form.watch("depositAmount")} FRW</span>
+                  <span className="font-medium">
+                    {form.watch("depositAmount")} FRW
+                  </span>
                 </div>
                 {form.watch("depositAmount") !== "0" && (
                   <div className="flex justify-between text-sm">
@@ -629,14 +670,15 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                           {groups?.map((group) => {
                             const isMemberGroup = availableGroupMembers.some(
                               (gm) =>
-                                gm.group?.id.toString() ===
-                                group.id.toString()
+                                gm.group?.id.toString() === group.id.toString()
                             );
                             return (
                               <SelectItem
                                 key={group.id}
                                 value={group.id.toString()}
-                                className={isMemberGroup ? "text-green-500" : ""}
+                                className={
+                                  isMemberGroup ? "text-green-500" : ""
+                                }
                               >
                                 {group.name} {isMemberGroup ? "(Member)" : ""}
                               </SelectItem>
@@ -690,7 +732,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                             {availableGroupMembers.map((groupMember) => (
                               <SelectItem
                                 key={groupMember?.id}
-                                value={groupMember?.id.toString()|| ""}
+                                value={groupMember?.id.toString() || ""}
                               >
                                 {groupMember?.member?.fullNames || undefined}
                               </SelectItem>
@@ -712,10 +754,19 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                   <ul className="mt-1">
                     <div className="flex text-gray-700 justify-between bg-gray-100 py-2 px-1">
                       <li>Price per share: {selectedGroup.pricePerShare}</li>
-                      <li>Allowed shares: {selectedGroup.minShares} to 10 shares</li>
+                      <li>
+                        Allowed shares: {selectedGroup.minShares} to 10 shares
+                      </li>
                     </div>
-                    <li className={`${shareValidation?.isValid ? "text-green-500" : "text-red-600"}`}>
-                      Current selection: {numberOfShares} shares ({shareValidation?.message})
+                    <li
+                      className={`${
+                        shareValidation?.isValid
+                          ? "text-green-500"
+                          : "text-red-600"
+                      }`}
+                    >
+                      Current selection: {numberOfShares} shares (
+                      {shareValidation?.message})
                     </li>
                   </ul>
                 </div>
@@ -821,38 +872,38 @@ export default function Contributions() {
   // Add separate queries for filter options
   const { data: members = [] } = useQuery(["members"], async () => {
     const { data } = await api.get("/members");
-    return data.results.map(member => ({
-      label: member.fullNames,
-      value: member.fullNames
+    console.log("Members data:", data); // Debug to see structure
+    return data.results.map((member) => ({
+      // Make sure these properties match what's available in your API response
+      label:
+        member.fullNames ,
+      value: member.id,
     }));
   });
 
   const { data: groups = [] } = useQuery(["groups"], async () => {
     const { data } = await api.get("/groups");
-    return data.results.map(group => ({
+    return data.results.map((group) => ({
       label: group.name,
-      value: group.name
+      value: group.name,
     }));
   });
 
-  const { data: paymentMethods = [] } = useQuery(["payment-methods"], async () => {
-    const { data } = await api.get("/payment-methods");
-    console.log("Payment Methods API Response:", data);
-    return data.results;
-  });
-
-  console.log("Payment Methods Data:", paymentMethods);
+  const { data: paymentMethods = [] } = useQuery(
+    ["payment-methods"],
+    async () => {
+      const { data } = await api.get("/payment-methods");
+      return data.results;
+    }
+  );
 
   const { data: users = [] } = useQuery(["users"], async () => {
     const { data } = await api.get("/users");
-    return data.results.map(user => ({
+    return data.results.map((user) => ({
       label: user.name,
-      value: user.name
+      value: user.name,
     }));
   });
-
-  const [isClientFiltering, setIsClientFiltering] = useState(false);
-  const [allData, setAllData] = useState([]);
 
   const recordsQuery = useQuery({
     queryKey: [
@@ -868,7 +919,7 @@ export default function Contributions() {
     keepPreviousData: true,
     queryFn: async () => {
       console.log("Current filters:", columnFilters);
-      
+
       const params = {
         page_size: pageSize,
         page: pageIndex + 1,
@@ -877,30 +928,40 @@ export default function Contributions() {
           filters: columnFilters.map((filter) => {
             // Map the filter field to the correct relation name
             const fieldMap = {
-              member: "member.fullNames",
+              // Changed this to filter by member ID instead of fullNames
+              member: "member.id",
               group: "group.name",
               paymentMethod: "paymentMethod.name",
               receivedBy: "receivedBy.name",
-              createdAt: "createdAt"
+              createdAt: "createdAt",
             };
-            
+
             // Handle date range filter differently
             if (filter.id === "createdAt" && filter.value?.length === 2) {
               const [startDate, endDate] = filter.value;
               // Set end date to end of day
               const endOfDay = new Date(endDate);
               endOfDay.setHours(23, 59, 59, 999);
-              
+
               return {
                 field: fieldMap[filter.id],
                 operator: "between",
                 value: [
                   new Date(startDate).toISOString(),
-                  endOfDay.toISOString()
-                ]
+                  endOfDay.toISOString(),
+                ],
               };
             }
-            
+
+            // For member filter, we now use the ID directly
+            if (filter.id === "member") {
+              return {
+                field: "member.id", // Change to member.id
+                operator: "in",
+                value: filter.value?.map((v) => v?.value || v),
+              };
+            }
+
             return {
               field: fieldMap[filter.id] || filter.id,
               operator: "in",
@@ -917,6 +978,16 @@ export default function Contributions() {
       const { data } = await api.get(`/contributions`, { params });
       console.log("API Response:", data);
 
+      // Verify if data.results exists and has content
+      if (!data?.results || data.results.length === 0) {
+        console.log("No data returned from API");
+        return {
+          items: [],
+          totalPages: 0,
+          meta: null,
+        };
+      }
+
       const totalDepositAmount = data?.results?.reduce(
         (a, b) => a + Number(b?.depositAmount || 0),
         0
@@ -926,10 +997,11 @@ export default function Contributions() {
         0
       );
 
+      // Transform the API results into the format expected by the DataTable
       return {
         items: data?.results?.map((e) => ({
           ...e,
-          member: e?.member,
+          member: e?.member, // Make sure member object is passed correctly
           group: e?.group?.name,
           paymentMethod: e?.paymentMethod?.name,
           receivedBy: e?.receivedBy?.name,
@@ -956,20 +1028,6 @@ export default function Contributions() {
     },
   });
 
-  // Add a function to get unique values from the current data
-  const getUniqueValues = (field) => {
-    const values = new Map();
-    recordsQuery.data?.items?.forEach(item => {
-      if (item[field]) {
-        values.set(item[field], {
-          label: item[field],
-          value: item[field]
-        });
-      }
-    });
-    return Array.from(values.values());
-  };
-
   const handleDelete = (record) => {
     confirmModal.setIsLoading(true);
     return api
@@ -993,7 +1051,9 @@ export default function Contributions() {
     ["contribution-details", selectedContribution?.id],
     async () => {
       if (!selectedContribution?.id) return null;
-      const { data } = await api.get(`/contributions/${selectedContribution.id}`);
+      const { data } = await api.get(
+        `/contributions/${selectedContribution.id}`
+      );
       return data.data;
     },
     {
@@ -1115,27 +1175,6 @@ export default function Contributions() {
       enableHiding: false,
     },
     {
-      accessorKey: "contributionType",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Type" />
-      ),
-      cell: ({ row }) => {
-        if (row.original.meta?.isFooter) {
-          return null;
-        }
-        const type = row.getValue("contributionType") as string;
-        return (
-          <div className="flex items-center capitalize gap-3">
-            <Badge variant={type === "saving" ? "default" : "secondary"}>
-              {type}
-            </Badge>
-          </div>
-        );
-      },
-      enableSorting: true,
-      enableHiding: false,
-    },
-    {
       accessorKey: "depositAmount",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Shares Amount" />
@@ -1247,23 +1286,27 @@ export default function Contributions() {
       ),
     },
   ];
+  React.useEffect(() => {
+    console.log("Current pagination:", { pageIndex, pageSize });
+    console.log("Current filters:", columnFilters);
+  }, [pageIndex, pageSize, columnFilters]);
 
   // Add a function to handle date range changes
   const handleDateRangeChange = (range: DateRange | undefined) => {
     setDateRange(range);
     if (range?.from && range?.to) {
-      setColumnFilters(prev => {
-        const otherFilters = prev.filter(f => f.id !== "createdAt");
+      setColumnFilters((prev) => {
+        const otherFilters = prev.filter((f) => f.id !== "createdAt");
         return [
           ...otherFilters,
           {
             id: "createdAt",
-            value: [range.from, range.to]
-          }
+            value: [range.from, range.to],
+          },
         ];
       });
     } else {
-      setColumnFilters(prev => prev.filter(f => f.id !== "createdAt"));
+      setColumnFilters((prev) => prev.filter((f) => f.id !== "createdAt"));
     }
   };
 
@@ -1335,10 +1378,11 @@ export default function Contributions() {
             name: "paymentMethod",
             title: "Payment Method",
             type: "select",
-            options: paymentMethods?.map(method => ({
-              label: method.name,
-              value: method.name
-            })) || [],
+            options:
+              paymentMethods?.map((method) => ({
+                label: method.name,
+                value: method.name,
+              })) || [],
           },
           {
             name: "receivedBy",
@@ -1388,7 +1432,9 @@ export default function Contributions() {
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
         <DialogContent className="max-w-[95vw] md:max-w-4xl h-[90vh] md:h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader className="border-b pb-4">
-            <DialogTitle className="text-xl font-semibold">Contribution Details</DialogTitle>
+            <DialogTitle className="text-xl font-semibold">
+              Contribution Details
+            </DialogTitle>
           </DialogHeader>
           {contributionDetailsQuery.isLoading ? (
             <div className="flex items-center justify-center p-8">
@@ -1403,35 +1449,72 @@ export default function Contributions() {
                   <div className="bg-card rounded-lg border p-4 md:p-6">
                     <div className="flex items-center gap-4 mb-6">
                       <Avatar className="h-16 w-16 md:h-20 md:w-20">
-                        <AvatarImage src={contributionDetailsQuery.data.member?.avatar} />
+                        <AvatarImage
+                          src={contributionDetailsQuery.data.member?.avatar}
+                        />
                         <AvatarFallback className="text-lg">
                           {contributionDetailsQuery.data.member?.firstName?.[0]}
                           {contributionDetailsQuery.data.member?.lastName?.[0]}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <h3 className="text-lg font-semibold">{contributionDetailsQuery.data.member?.fullNames}</h3>
-                        <p className="text-sm text-muted-foreground">Contribution ID: #{contributionDetailsQuery.data.id}</p>
+                        <h3 className="text-lg font-semibold">
+                          {contributionDetailsQuery.data.member?.fullNames}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Contribution ID: #{contributionDetailsQuery.data.id}
+                        </p>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm text-muted-foreground">Deposit Amount</p>
-                          <p className="font-medium">{(contributionDetailsQuery.data.depositAmount || 0).toLocaleString()} FRW</p>
+                          <p className="text-sm text-muted-foreground">
+                            Deposit Amount
+                          </p>
+                          <p className="font-medium">
+                            {(
+                              contributionDetailsQuery.data.depositAmount || 0
+                            ).toLocaleString()}{" "}
+                            FRW
+                          </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Solidarity Amount</p>
-                          <p className="font-medium">{(contributionDetailsQuery.data.solidarityAmount || 0).toLocaleString()} FRW</p>
+                          <p className="text-sm text-muted-foreground">
+                            Solidarity Amount
+                          </p>
+                          <p className="font-medium">
+                            {(
+                              contributionDetailsQuery.data.solidarityAmount ||
+                              0
+                            ).toLocaleString()}{" "}
+                            FRW
+                          </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Current Savings</p>
-                          <p className="font-medium">{(contributionDetailsQuery.data.currentSavingAmount || 0).toLocaleString()} FRW</p>
+                          <p className="text-sm text-muted-foreground">
+                            Current Savings
+                          </p>
+                          <p className="font-medium">
+                            {(
+                              contributionDetailsQuery.data
+                                .currentSavingAmount || 0
+                            ).toLocaleString()}{" "}
+                            FRW
+                          </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Current Solidarity</p>
-                          <p className="font-medium">{(contributionDetailsQuery.data.currentSolidalityAmount || 0).toLocaleString()} FRW</p>
+                          <p className="text-sm text-muted-foreground">
+                            Current Solidarity
+                          </p>
+                          <p className="font-medium">
+                            {(
+                              contributionDetailsQuery.data
+                                .currentSolidalityAmount || 0
+                            ).toLocaleString()}{" "}
+                            FRW
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -1439,25 +1522,47 @@ export default function Contributions() {
 
                   {/* Payment Information */}
                   <div className="bg-card rounded-lg border p-4 md:p-6">
-                    <h3 className="text-base font-semibold mb-4">Payment Information</h3>
+                    <h3 className="text-base font-semibold mb-4">
+                      Payment Information
+                    </h3>
                     <div className="space-y-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">Payment Method</p>
-                        <p className="font-medium">{contributionDetailsQuery.data.paymentMethod?.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Payment Method
+                        </p>
+                        <p className="font-medium">
+                          {contributionDetailsQuery.data.paymentMethod?.name}
+                        </p>
                       </div>
-                      {contributionDetailsQuery.data.paymentMethod?.accountNumber && (
+                      {contributionDetailsQuery.data.paymentMethod
+                        ?.accountNumber && (
                         <div>
-                          <p className="text-sm text-muted-foreground">Account Number</p>
-                          <p className="font-medium">{contributionDetailsQuery.data.paymentMethod.accountNumber}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Account Number
+                          </p>
+                          <p className="font-medium">
+                            {
+                              contributionDetailsQuery.data.paymentMethod
+                                .accountNumber
+                            }
+                          </p>
                         </div>
                       )}
                       <div>
-                        <p className="text-sm text-muted-foreground">Received By</p>
-                        <p className="font-medium">{contributionDetailsQuery.data.receivedBy?.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Received By
+                        </p>
+                        <p className="font-medium">
+                          {contributionDetailsQuery.data.receivedBy?.name}
+                        </p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Date</p>
-                        <p className="font-medium">{new Date(contributionDetailsQuery.data.createdAt).toLocaleDateString()}</p>
+                        <p className="font-medium">
+                          {new Date(
+                            contributionDetailsQuery.data.createdAt
+                          ).toLocaleDateString()}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1467,36 +1572,79 @@ export default function Contributions() {
                 <div className="lg:col-span-7 space-y-6">
                   {/* Group Information */}
                   <div className="bg-card rounded-lg border p-4 md:p-6">
-                    <h3 className="text-base font-semibold mb-4">Group Information</h3>
+                    <h3 className="text-base font-semibold mb-4">
+                      Group Information
+                    </h3>
                     <div className="space-y-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">Group Name</p>
-                        <p className="font-medium">{contributionDetailsQuery.data.group?.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Group Name
+                        </p>
+                        <p className="font-medium">
+                          {contributionDetailsQuery.data.group?.name}
+                        </p>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm text-muted-foreground">Meeting Day</p>
-                          <p className="font-medium">{contributionDetailsQuery.data.group?.meetingDay}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Meeting Time</p>
+                          <p className="text-sm text-muted-foreground">
+                            Meeting Day
+                          </p>
                           <p className="font-medium">
-                            {contributionDetailsQuery.data.group?.meetingStartTime} - {contributionDetailsQuery.data.group?.meetingEndTime}
+                            {contributionDetailsQuery.data.group?.meetingDay}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Price Per Share</p>
-                          <p className="font-medium">{(contributionDetailsQuery.data.group?.pricePerShare || 0).toLocaleString()} FRW</p>
+                          <p className="text-sm text-muted-foreground">
+                            Meeting Time
+                          </p>
+                          <p className="font-medium">
+                            {
+                              contributionDetailsQuery.data.group
+                                ?.meetingStartTime
+                            }{" "}
+                            -{" "}
+                            {
+                              contributionDetailsQuery.data.group
+                                ?.meetingEndTime
+                            }
+                          </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Solidarity Amount</p>
-                          <p className="font-medium">{(contributionDetailsQuery.data.group?.solidarityAmount || 0).toLocaleString()} FRW</p>
+                          <p className="text-sm text-muted-foreground">
+                            Price Per Share
+                          </p>
+                          <p className="font-medium">
+                            {(
+                              contributionDetailsQuery.data.group
+                                ?.pricePerShare || 0
+                            ).toLocaleString()}{" "}
+                            FRW
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">
+                            Solidarity Amount
+                          </p>
+                          <p className="font-medium">
+                            {(
+                              contributionDetailsQuery.data.group
+                                ?.solidarityAmount || 0
+                            ).toLocaleString()}{" "}
+                            FRW
+                          </p>
                         </div>
                       </div>
                       {contributionDetailsQuery.data.group?.meetingLocation && (
                         <div>
-                          <p className="text-sm text-muted-foreground">Meeting Location</p>
-                          <p className="font-medium">{contributionDetailsQuery.data.group.meetingLocation}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Meeting Location
+                          </p>
+                          <p className="font-medium">
+                            {
+                              contributionDetailsQuery.data.group
+                                .meetingLocation
+                            }
+                          </p>
                         </div>
                       )}
                     </div>
@@ -1504,32 +1652,61 @@ export default function Contributions() {
 
                   {/* Season Information */}
                   <div className="bg-card rounded-lg border p-4 md:p-6">
-                    <h3 className="text-base font-semibold mb-4">Season Information</h3>
+                    <h3 className="text-base font-semibold mb-4">
+                      Season Information
+                    </h3>
                     <div className="space-y-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">Season Name</p>
-                        <p className="font-medium">{contributionDetailsQuery.data.season?.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Season Name
+                        </p>
+                        <p className="font-medium">
+                          {contributionDetailsQuery.data.season?.name}
+                        </p>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm text-muted-foreground">Start Date</p>
-                          <p className="font-medium">{new Date(contributionDetailsQuery.data.season?.start).toLocaleDateString()}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Start Date
+                          </p>
+                          <p className="font-medium">
+                            {new Date(
+                              contributionDetailsQuery.data.season?.start
+                            ).toLocaleDateString()}
+                          </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">End Date</p>
-                          <p className="font-medium">{new Date(contributionDetailsQuery.data.season?.end).toLocaleDateString()}</p>
+                          <p className="text-sm text-muted-foreground">
+                            End Date
+                          </p>
+                          <p className="font-medium">
+                            {new Date(
+                              contributionDetailsQuery.data.season?.end
+                            ).toLocaleDateString()}
+                          </p>
                         </div>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Status</p>
-                        <Badge variant={contributionDetailsQuery.data.season?.status === 'active' ? 'default' : 'secondary'}>
+                        <Badge
+                          variant={
+                            contributionDetailsQuery.data.season?.status ===
+                            "active"
+                              ? "default"
+                              : "secondary"
+                          }
+                        >
                           {contributionDetailsQuery.data.season?.status}
                         </Badge>
                       </div>
                       {contributionDetailsQuery.data.season?.description && (
                         <div>
-                          <p className="text-sm text-muted-foreground">Description</p>
-                          <p className="text-sm">{contributionDetailsQuery.data.season.description}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Description
+                          </p>
+                          <p className="text-sm">
+                            {contributionDetailsQuery.data.season.description}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -1540,20 +1717,28 @@ export default function Contributions() {
                     <div className="bg-card rounded-lg border p-4 md:p-6">
                       <h3 className="text-base font-semibold mb-4">Fines</h3>
                       <div className="space-y-4">
-                        {contributionDetailsQuery.data.fines.map((fine, index) => (
-                          <div key={index} className="border rounded-lg p-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm text-muted-foreground">Amount</p>
-                                <p className="font-medium">{(fine.amount || 0).toLocaleString()} FRW</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Reason</p>
-                                <p className="font-medium">{fine.reason}</p>
+                        {contributionDetailsQuery.data.fines.map(
+                          (fine, index) => (
+                            <div key={index} className="border rounded-lg p-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-sm text-muted-foreground">
+                                    Amount
+                                  </p>
+                                  <p className="font-medium">
+                                    {(fine.amount || 0).toLocaleString()} FRW
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">
+                                    Reason
+                                  </p>
+                                  <p className="font-medium">{fine.reason}</p>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          )
+                        )}
                       </div>
                     </div>
                   )}

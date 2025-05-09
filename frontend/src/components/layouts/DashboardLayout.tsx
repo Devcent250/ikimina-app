@@ -21,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useEffect } from "react";
-import { useAuth } from "@/context/auth.context";
 
 const languages = [
   { value: "s1", label: "Kinyanrwanda", flag: "🇷🇼" },
@@ -30,7 +29,6 @@ const languages = [
 ];
 
 export default function DashboardLayout() {
-  const {user}=useAuth()
   const matches = useMatches();
 
   useEffect(() => {

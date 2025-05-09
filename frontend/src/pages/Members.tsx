@@ -1,6 +1,6 @@
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import DataTableColumnHeader from "@/components/datatable/DataTableColumnHeader";
-import { Loader, MoreVertical, PlusCircle, UserPlus, X, Calendar as CalendarIcon, FileX, Users, UserCircle, Phone, User, MapPin, Building, UsersRound } from "lucide-react";
+import { Loader, MoreVertical, PlusCircle, Calendar as CalendarIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "react-query";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import {
   Sheet,
@@ -59,7 +58,6 @@ import { useAuth } from "@/context/auth.context";
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -719,13 +717,6 @@ export default function Members() {
     }));
   });
 
-  const { data: groups = [] } = useQuery(["groups"], async () => {
-    const { data } = await api.get("/groups");
-    return data.results.map(group => ({
-      label: group.name,
-      value: group.name
-    }));
-  });
 
   // Add gender options
   const genderOptions = [

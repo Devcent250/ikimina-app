@@ -12,6 +12,7 @@ interface AuthContextValue {
   setCurrentUser: (userData: any) => void;
   logout: () => void;
   loaderUser: () => void;
+  loading:boolean
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);

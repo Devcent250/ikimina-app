@@ -1,7 +1,7 @@
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import DataTableColumnHeader from "@/components/datatable/DataTableColumnHeader";
 import { Loader, MoreVertical, PlusCircle, Building2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "react-query";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -38,16 +38,8 @@ import ConfirmModal from "@/components/modal/ConfirmModal";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useAuth } from "@/context/auth.context";
 
 const formSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -56,8 +48,6 @@ const formSchema = z.object({
 });
 
 function DistrictForm({ isOpen, setIsOpen, refetch, record }) {
-  const { user } = useAuth();
-  const isAdmin = user?.isAdmin;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
