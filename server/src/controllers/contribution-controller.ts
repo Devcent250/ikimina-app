@@ -26,17 +26,34 @@ export class ContributionController {
       maxLimit: 100,
       defaultSortBy: "createdAt",
       defaultOrder: "DESC",
-      searchableFields: [],
+      // Don't use dot notation in searchableFields
+      searchableFields: [], // We'll handle search separately
       allowedSortFields: ["createdAt", "updatedAt", "depositAmount"],
       filterableFields: [
-        "member",
-        "groupMember",
-        "season",
-        "contributionType",
+        "member", // Keep this simple without dot notation
         "group",
         "paymentMethod",
         "receivedBy",
+        "date",
       ],
+      nestedJoins: [
+        {
+          path: "contributions.member",
+          alias: "member"
+        },
+        {
+          path: "contributions.group",
+          alias: "group"
+        },
+        {
+          path: "contributions.paymentMethod",
+          alias: "paymentMethod"
+        },
+        {
+          path: "contributions.receivedBy",
+          alias: "receivedBy"
+        }
+      ]
     });
   }
 
@@ -121,7 +138,8 @@ export class ContributionController {
 
       // Calculate new amounts
       const currentSavingAmount = beforeSavingAmount + Number(depositAmount);
-      const currentSolidalityAmount = beforeSolidalityAmount + Number(solidarityAmount);
+      const currentSolidalityAmount =
+        beforeSolidalityAmount + Number(solidarityAmount);
 
       // Create new contribution
       const newContribution = this.repository.create({
@@ -192,6 +210,7 @@ export class ContributionController {
       let contribution = await this.repository.findOne({
         where: { id: Number(recordId) },
         relations: [
+          "member.id",
           "member",
           "groupMember",
           "season",
@@ -284,8 +303,10 @@ export class ContributionController {
         }
 
         // Update current amounts
-        contribution.currentSavingAmount = beforeSavingAmount + newDepositAmount;
-        contribution.currentSolidalityAmount = beforeSolidalityAmount + newSolidarityAmount;
+        contribution.currentSavingAmount =
+          beforeSavingAmount + newDepositAmount;
+        contribution.currentSolidalityAmount =
+          beforeSolidalityAmount + newSolidarityAmount;
         contribution.beforeSavingAmount = beforeSavingAmount;
         contribution.beforeSolidalityAmount = beforeSolidalityAmount;
         contribution.depositAmount = newDepositAmount;
@@ -304,23 +325,71 @@ export class ContributionController {
 
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const result = await this?.queryBuilder.buildAndExecute(
-        req.query as QueryParams,
-        [],
-        [
-          "contributions.member",
-          "contributions.groupMember",
-          "contributions.group",
-          "contributions.receivedBy",
-          "contributions.paymentMethod",
-          "contributions.branch",
-        ]
-      );
+      console.log("Request query params:", req.query);
+      
+      // Create a copy of the query params to modify
+      const params = { ...req.query } as QueryParams;
+      
+      // Parse filters properly
+      if (req.query.filters) {
+        try {
+          let filtersStr:any = Array.isArray(req.query.filters) 
+            ? req.query.filters[0] 
+            : req.query.filters;
+          
+          // Ensure the JSON string is properly formed
+          if (filtersStr.endsWith('}') && !filtersStr.endsWith(']}')) {
+            filtersStr = filtersStr + ']';
+          }
+          
+          const parsedFilters = JSON.parse(filtersStr);
+          params.filters = Array.isArray(parsedFilters) ? parsedFilters : [parsedFilters];
+          
+          console.log("Parsed filters:", params.filters);
+        } catch (error) {
+          console.log("Error parsing filters:", error);
+          params.filters = []; // Set default empty array for safety
+        }
+      }
+      
+      // Custom conditions for member name search
+      const customConditions = [];
+      
+      // Handle search specifically for member names
+      if (params.search) {
+        customConditions.push({
+          where: `(member.firstName ILIKE :search OR member.lastName ILIKE :search)`,
+          parameters: { search: `%${params.search}%` }
+        });
+        // Remove the search parameter since we're handling it manually
+        delete params.search;
+      }
+      
+      // Add custom joins for related entities
+      const customJoins = [
+        "contributions.member",
+        "contributions.group",
+        "contributions.paymentMethod",
+        "contributions.receivedBy"
+      ];
 
-      res.json({
-        ...result,
-        results: result.results.map(this.format),
-      });
+      try {
+        const result = await this.queryBuilder.buildAndExecute(
+          params,
+          customConditions,
+          customJoins
+        );
+        
+        console.log(`Found ${result.results?.length || 0} contributions`);
+        
+        res.json({
+          ...result,
+          results: result.results?.map(this.format) || []
+        });
+      } catch (error) {
+        console.error("Query execution error:", error);
+        next(error);
+      }
     }
   );
 
