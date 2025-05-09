@@ -41,9 +41,11 @@ const delayMiddleware = (_: any, __: any, next: any) => {
 
 const app = express();
 
-app.use(cors({
-  origin:"*"
-}));
+app.use(
+  cors({
+    origin: "*",
+  })
+);
 app.use(express.json());
 app.use(morgan("tiny"));
 
@@ -171,11 +173,15 @@ app.use(errorHandler);
 
 AppDataSource.initialize()
   .then(async () => {
-    app.listen(process.env.PORT || 8000, () => {
-      console.log(
-        "Server is running on http://localhost:" + process.env.PORT || 8000
-      );
-    });
-    console.log("Data Source has been initialized!");
+        console.log("✅ Data Source Initialized");
+        if (process.env.NODE_ENV === "production") {
+      console.log("🚀 Running migrations...");
+      await AppDataSource.runMigrations()
+        .then(() => console.log("✅ Migrations complete"))
+        .catch((err) => {
+          console.error("❌ Migration failed", err);
+          process.exit(1);
+        });
+    }
   })
   .catch((error) => console.log(error));
