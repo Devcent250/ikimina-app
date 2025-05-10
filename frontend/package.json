@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "start": "vite",
+    "dev": "vite",
+    "start": "serve -s dist -l 3000",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -69,6 +70,7 @@
     "react-to-print": "^3.0.5",
     "react-use": "^17.5.1",
     "recharts": "^2.15.1",
+    "serve": "^14.2.4",
     "sonner": "^1.7.0",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
