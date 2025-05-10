@@ -81,7 +81,7 @@ function BranchForm({ isOpen, setIsOpen, refetch, record }) {
       .then(() => {
         refetch();
         toast.success(
-          record ? "Branch updated successfully" : "Branch created successfully"
+          record ? "Zone updated successfully" : "Zone created successfully"
         );
         setIsOpen(false);
         form.reset();
@@ -102,7 +102,7 @@ function BranchForm({ isOpen, setIsOpen, refetch, record }) {
       <DialogContent className="sm:max-w-lg p-0 gap-0">
         <DialogHeader className="border-b pb-3">
           <DialogTitle>
-            {record ? "Update Branch" : "Add New Branch"}
+            {record ? "Update Zone" : "Add New Zone"}
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
@@ -143,10 +143,10 @@ function BranchForm({ isOpen, setIsOpen, refetch, record }) {
                   name="name"
                   render={({ field, fieldState }) => (
                     <FormItem>
-                      <FormLabel>Branch Name</FormLabel>
+                      <FormLabel>Zone Name</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter branch name"
+                          placeholder="Enter zone name"
                           error={fieldState?.error?.message}
                           {...field}
                         />
@@ -162,7 +162,7 @@ function BranchForm({ isOpen, setIsOpen, refetch, record }) {
                       <FormLabel>Address</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter branch address"
+                          placeholder="Enter zone address"
                           error={fieldState?.error?.message}
                           {...field}
                         />
@@ -179,7 +179,7 @@ function BranchForm({ isOpen, setIsOpen, refetch, record }) {
                         <FormLabel>Description</FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Enter branch description"
+                            placeholder="Enter zone description"
                             error={fieldState?.error?.message}
                             {...field}
                           />
@@ -213,7 +213,7 @@ function BranchForm({ isOpen, setIsOpen, refetch, record }) {
                 {form.formState.isSubmitting && (
                   <Loader className="mr-2 h-4 w-4 text-white animate-spin" />
                 )}
-                {record ? "Update Branch" : "Add Branch"}
+                {record ? "Update Zone" : "Add Zone"}
               </Button>
             </DialogFooter>
           </form>
@@ -342,21 +342,21 @@ export default function Braches() {
                   setRecordToShow(row?.original);
                 }}
               >
-                View Branch Details
+                View Zone Details
               </DropdownMenuItem> */}
               <DropdownMenuItem
                 onClick={() => {
                   setRecordToEdit(row?.original);
                 }}
               >
-                Update Branch
+                Update Zone
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
                   confirmModal.open({ meta: row?.original });
                 }}
               >
-                Delete Branch
+                Delete Zone
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -431,7 +431,7 @@ export default function Braches() {
       .then(() => {
         recordsQuery.refetch();
         confirmModal.close();
-        toast.success("Branch deleted successfully");
+        toast.success("Zone deleted successfully");
       })
       .catch((e) => {
         confirmModal.setIsLoading(false);
@@ -457,7 +457,7 @@ export default function Braches() {
         <div className="flex items-center justify-between space-y-2- my-3">
           <div className="flex items-start gap-2 flex-col">
             <h2 className="text-[16px] font-semibold tracking-tight">
-              Branches Management
+              Zones Management
             </h2>
           </div>
           <div className="space-x-2">
@@ -468,7 +468,7 @@ export default function Braches() {
               size="sm"
             >
               <PlusCircle size={16} className="mr-2" />
-              <span>Add new Branch</span>
+              <span>Add new Zone</span>
             </Button>
           </div>
         </div>
