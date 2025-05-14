@@ -354,7 +354,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                     name="branchId"
                     render={({ field, fieldState }) => (
                       <FormItem>
-                        <FormLabel>Branch</FormLabel>
+                        <FormLabel>Zone</FormLabel>
                         <FormControl>
                           <Select
                             onValueChange={field.onChange}
@@ -363,7 +363,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                           >
                             <FormControl>
                               <SelectTrigger error={fieldState?.error?.message}>
-                                <SelectValue placeholder="Select branch" />
+                                <SelectValue placeholder="Select zone" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -936,7 +936,7 @@ export default function Members() {
     {
       accessorKey: "branch",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Branch" />
+        <DataTableColumnHeader column={column} title="Zone" />
       ),
       cell: ({ row }) => {
         return (
@@ -1235,7 +1235,7 @@ export default function Members() {
                         <p className="font-medium">{memberDetailsQuery.data.currentAddress}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Branch</p>
+                        <p className="text-sm text-muted-foreground">Zone</p>
                         <p className="font-medium">{memberDetailsQuery.data.branch?.name}</p>
                       </div>
                     </div>
@@ -1248,11 +1248,11 @@ export default function Members() {
                     </h3>
                     <div className="space-y-3">
                       <div>
-                        <p className="text-sm text-muted-foreground">Branch Name</p>
+                        <p className="text-sm text-muted-foreground">Zone Name</p>
                         <p className="font-medium">{memberDetailsQuery.data.branch?.name}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Branch Address</p>
+                        <p className="text-sm text-muted-foreground">Zone Address</p>
                         <p className="font-medium">{memberDetailsQuery.data.branch?.address}</p>
                       </div>
                     </div>
@@ -1392,7 +1392,7 @@ export default function Members() {
           facets={[
             {
               name: "branch",
-              title: "Branch",
+              title: "Zone",
               type: "select",
               options: branches,
             },

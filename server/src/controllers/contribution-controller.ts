@@ -323,75 +323,94 @@ export class ContributionController {
     }
   );
 
-  getAll = asyncHandler(
-    async (req: Request, res: Response, next: NextFunction) => {
-      console.log("Request query params:", req.query);
-      
-      // Create a copy of the query params to modify
-      const params = { ...req.query } as QueryParams;
-      
-      // Parse filters properly
-      if (req.query.filters) {
-        try {
-          let filtersStr:any = Array.isArray(req.query.filters) 
-            ? req.query.filters[0] 
-            : req.query.filters;
-          
-          // Ensure the JSON string is properly formed
-          if (filtersStr.endsWith('}') && !filtersStr.endsWith(']}')) {
-            filtersStr = filtersStr + ']';
-          }
-          
-          const parsedFilters = JSON.parse(filtersStr);
-          params.filters = Array.isArray(parsedFilters) ? parsedFilters : [parsedFilters];
-          
-          console.log("Parsed filters:", params.filters);
-        } catch (error) {
-          console.log("Error parsing filters:", error);
-          params.filters = []; // Set default empty array for safety
-        }
-      }
-      
-      // Custom conditions for member name search
-      const customConditions = [];
-      
-      // Handle search specifically for member names
-      if (params.search) {
-        customConditions.push({
-          where: `(member.firstName ILIKE :search OR member.lastName ILIKE :search)`,
-          parameters: { search: `%${params.search}%` }
-        });
-        // Remove the search parameter since we're handling it manually
-        delete params.search;
-      }
-      
-      // Add custom joins for related entities
-      const customJoins = [
-        "contributions.member",
-        "contributions.group",
-        "contributions.paymentMethod",
-        "contributions.receivedBy"
-      ];
-
+getAll = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    console.log("Request query params:", req.query);
+    
+    // Create a copy of the query params to modify
+    const params = { ...req.query } as QueryParams;
+    
+    // Parse filters properly
+    if (req.query.filters) {
       try {
-        const result = await this.queryBuilder.buildAndExecute(
-          params,
-          customConditions,
-          customJoins
-        );
+        let filtersStr:any = Array.isArray(req.query.filters) 
+          ? req.query.filters[0] 
+          : req.query.filters;
         
-        console.log(`Found ${result.results?.length || 0} contributions`);
+        // Ensure the JSON string is properly formed
+        if (filtersStr.endsWith('}') && !filtersStr.endsWith(']}')) {
+          filtersStr = filtersStr + ']';
+        }
         
-        res.json({
-          ...result,
-          results: result.results?.map(this.format) || []
-        });
+        const parsedFilters = JSON.parse(filtersStr);
+        params.filters = Array.isArray(parsedFilters) ? parsedFilters : [parsedFilters];
+        
+        console.log("Parsed filters:", params.filters);
       } catch (error) {
-        console.error("Query execution error:", error);
-        next(error);
+        console.log("Error parsing filters:", error);
+        params.filters = []; // Set default empty array for safety
       }
     }
-  );
+    
+    // Custom conditions array
+    const customConditions = [];
+    
+    // *** ADD THIS NEW CODE HERE ***
+    // Check for member filter and handle it specially
+    if (params.filters && params.filters.length > 0) {
+      const memberFilter = params.filters.find(f => f.field === "member" && f.operator === "in");
+      if (memberFilter) {
+        console.log("Found member filter:", memberFilter);
+        // Convert the filter to use member.id instead
+        customConditions.push({
+          where: `member.id IN (:...memberIds)`,
+          parameters: { memberIds: memberFilter.value }
+        });
+        
+        // Remove the original member filter as we're handling it separately
+        params.filters = params.filters.filter(f => f.field !== "member");
+        console.log("Updated filters after member handling:", params.filters);
+      }
+    }
+    // *** END OF NEW CODE ***
+    
+    // Handle search specifically for member names
+    if (params.search) {
+      customConditions.push({
+        where: `(member.firstName ILIKE :search OR member.lastName ILIKE :search)`,
+        parameters: { search: `%${params.search}%` }
+      });
+      // Remove the search parameter since we're handling it manually
+      delete params.search;
+    }
+    
+    // Add custom joins for related entities
+    const customJoins = [
+      "contributions.member",
+      "contributions.group",
+      "contributions.paymentMethod",
+      "contributions.receivedBy"
+    ];
+
+    try {
+      const result = await this.queryBuilder.buildAndExecute(
+        params,
+        customConditions,
+        customJoins
+      );
+      
+      console.log(`Found ${result.results?.length || 0} contributions`);
+      
+      res.json({
+        ...result,
+        results: result.results?.map(this.format) || []
+      });
+    } catch (error) {
+      console.error("Query execution error:", error);
+      next(error);
+    }
+  }
+);
 
   delete = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {

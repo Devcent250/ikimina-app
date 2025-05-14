@@ -605,7 +605,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                 name="branchId"
                 render={({ field, fieldState }) => (
                   <FormItem>
-                    <FormLabel>Branch</FormLabel>
+                    <FormLabel>Zone</FormLabel>
                     <FormControl>
                       <Select
                         disabled={Boolean(selectedMember)} // Disabled when member is selected
@@ -621,7 +621,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                       >
                         <FormControl>
                           <SelectTrigger error={fieldState?.error?.message}>
-                            <SelectValue placeholder="Select branch" />
+                            <SelectValue placeholder="Select Zone" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -875,8 +875,7 @@ export default function Contributions() {
     console.log("Members data:", data); // Debug to see structure
     return data.results.map((member) => ({
       // Make sure these properties match what's available in your API response
-      label:
-        member.fullNames ,
+      label: member.fullNames,
       value: member.id,
     }));
   });
@@ -928,8 +927,7 @@ export default function Contributions() {
           filters: columnFilters.map((filter) => {
             // Map the filter field to the correct relation name
             const fieldMap = {
-              // Changed this to filter by member ID instead of fullNames
-              member: "member.id",
+              member: "member", // Just use "member" instead of "member.id"
               group: "group.name",
               paymentMethod: "paymentMethod.name",
               receivedBy: "receivedBy.name",
@@ -953,19 +951,26 @@ export default function Contributions() {
               };
             }
 
-            // For member filter, we now use the ID directly
+            // For member filter specifically
             if (filter.id === "member") {
               return {
-                field: "member.id", // Change to member.id
+                field: "member", // Just use "member" instead of "member.id"
                 operator: "in",
-                value: filter.value?.map((v) => v?.value || v),
+                value: Array.isArray(filter.value)
+                  ? filter.value.map((v) =>
+                      typeof v === "object" ? v.value : v
+                    )
+                  : [filter.value],
               };
             }
 
+            // For other filters
             return {
               field: fieldMap[filter.id] || filter.id,
               operator: "in",
-              value: filter.value?.map((v) => v?.value || v),
+              value: Array.isArray(filter.value)
+                ? filter.value.map((v) => (typeof v === "object" ? v.value : v))
+                : [filter.value],
             };
           }),
         }),
@@ -1695,6 +1700,12 @@ export default function Contributions() {
                               ? "default"
                               : "secondary"
                           }
+                          className={`${
+                            contributionDetailsQuery.data.season?.status ===
+                            "active"
+                              ? "bg-green-100 text-green-600"
+                              : "bg-red-100 text-red-600"
+                          } shadow-none`}
                         >
                           {contributionDetailsQuery.data.season?.status}
                         </Badge>

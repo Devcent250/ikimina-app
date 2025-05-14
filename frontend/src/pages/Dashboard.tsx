@@ -219,7 +219,7 @@ export default function DashboardOverview() {
             <Card className="shadow-none rounded-md">
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                 <CardTitle className="text-sm font-medium">
-                  Branches Count
+                  Zones Count
                 </CardTitle>
                 <Building className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
@@ -232,7 +232,7 @@ export default function DashboardOverview() {
                   )}
                 </div>
                 <div className="flex items-center text-xs text-muted-foreground mt-1">
-                  Total branches across.
+                  Total zones across.
                 </div>
               </CardContent>
             </Card>
@@ -409,7 +409,7 @@ export default function DashboardOverview() {
               >
                 <ScrollArea className="w-full rounded-lg border-r border-l whitespace-nowrap">
                   <TabsList>
-                    <TabsTrigger value="all">All Branches</TabsTrigger>
+                    <TabsTrigger value="all">All Zones</TabsTrigger>
                     {branches?.map((e) => (
                       <TabsTrigger value={e.id}>{e.name}</TabsTrigger>
                     ))}
@@ -445,9 +445,9 @@ export default function DashboardOverview() {
                           <div className="flex justify-between">
                             <span>Members: {group.totalMembers}</span>
                             <span>
-                              Avg:
+                              Tot:
                               {Number(
-                                group.averageSavings
+                                group.totalSavings
                               ).toLocaleString()}{" "}
                               FRW
                             </span>

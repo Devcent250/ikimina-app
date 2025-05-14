@@ -320,7 +320,7 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
                     name="branchId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Branch</FormLabel>
+                        <FormLabel>Zone</FormLabel>
                         <Select
                           onValueChange={(value) =>
                             field.onChange(Number(value))
@@ -333,8 +333,8 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
                               <SelectValue
                                 placeholder={
                                   districtBranchesQuery.isLoading
-                                    ? "Loading branches..."
-                                    : "Select branch"
+                                    ? "Loading zones..."
+                                    : "Select zone"
                                 }
                               />
                             </SelectTrigger>
@@ -760,7 +760,7 @@ export default function Groups() {
       value: branch.name,
     }));
   });
-
+  console.log("branches===",branches)
 
   // Add meeting frequency options
   const meetingFrequencyOptions = [
@@ -974,7 +974,14 @@ export default function Groups() {
       accessorKey: "isActive",
       header: "Status",
       cell: ({ row }) => (
-        <Badge variant={row.original.isActive ? "default" : "secondary"} className={`${row.original.isActive ? "bg-green-100 text-green-600":"bg-red-100 text-red-600"} font-light shadow-none`}>
+        <Badge
+          variant={row.original.isActive ? "default" : "secondary"}
+          className={`${
+            row.original.isActive
+              ? "bg-green-100 text-green-600"
+              : "bg-red-100 text-red-600"
+          } font-light shadow-none`}
+        >
           {row.original.isActive ? "Active" : "Inactive"}
         </Badge>
       ),
@@ -1055,8 +1062,9 @@ export default function Groups() {
           filters: columnFilters.map((filter) => {
             // Map the filter field to the correct relation name
             const fieldMap = {
-              branch: "branch.name",
+              branchId: "branchId",
               meetingFrequency: "meetingFrequency",
+              isActive: "isActive",
               createdAt: "createdAt",
             };
 
@@ -1074,6 +1082,28 @@ export default function Groups() {
                   new Date(startDate).toISOString(),
                   endOfDay.toISOString(),
                 ],
+              };
+            }
+
+            // Handle branchId filter - we need to map from branch name to branchId
+            if (filter.id === "branch") {
+              return {
+                field: "branchId",
+                operator: "in",
+                value: filter.value?.map((v) => {
+                  // Find the branch ID based on the branch name
+                  const branch = branches.find((b) => b.label === v);
+                  return branch ? branch.id : v;
+                }),
+              };
+            }
+
+            // Handle isActive filter
+            if (filter.id === "isActive") {
+              return {
+                field: "isActive",
+                operator: "eq",
+                value: filter.value === "active",
               };
             }
 
@@ -1106,6 +1136,11 @@ export default function Groups() {
       };
     },
   });
+
+  const statusOptions = [
+    { label: "Active", value: "active" },
+    { label: "Inactive", value: "inactive" },
+  ];
 
   const handleDelete = (record) => {
     confirmModal.setIsLoading(true);
@@ -1238,6 +1273,12 @@ export default function Groups() {
               type: "select",
               options: meetingFrequencyOptions,
             },
+            {
+              name: "isActive",
+              title: "Status",
+              type: "select",
+              options: statusOptions,
+            },
           ]}
         />
       </div>
@@ -1264,7 +1305,11 @@ export default function Groups() {
                   variant={
                     groupDetailsQuery.data?.isActive ? "default" : "secondary"
                   }
-                  className={`${groupDetailsQuery.data?.isActive ? "bg-green-100 text-green-600 " : "text-red-600 bg-red-100"} font-light shadow-none`}
+                  className={`${
+                    groupDetailsQuery.data?.isActive
+                      ? "bg-green-100 text-green-600 "
+                      : "text-red-600 bg-red-100"
+                  } font-light shadow-none`}
                 >
                   {groupDetailsQuery.data?.isActive ? "Active" : "Inactive"}
                 </Badge>
@@ -1298,7 +1343,7 @@ export default function Groups() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">
-                          Branch
+                          Zone
                         </span>
                         <span className="font-medium">
                           {groupDetailsQuery.data.branch?.name || "N/A"}

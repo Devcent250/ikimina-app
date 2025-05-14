@@ -74,8 +74,8 @@ const router = createBrowserRouter([
               },
               {
                 element: <Braches />,
-                path: "branches",
-                handle: { crumb: () => "Branches" },
+                path: "zones",
+                handle: { crumb: () => "Zones" },
               },
               {
                 element: <SavingSeasons />,
