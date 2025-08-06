@@ -34,16 +34,41 @@ export function NavUser({
     name: string;
     email: string;
     profileUrl: string;
-    role: string;
+    role: string | { name: string } | null;
+    group?: { name: string } | null;
     isAdmin?: boolean;
   };
 }) {
   const { isMobile } = useSidebar();
   const logoutModal = useModalState();
   const navigate = useNavigate();
-  
+
   const isAdmin = user?.isAdmin === true;
-  
+
+  // Get the role display name - if user is admin, show "Admin", otherwise show their role
+  const getRoleDisplayName = () => {
+    if (isAdmin) {
+      return "Admin";
+    }
+
+    // Check if user has role and group information
+    if (user.role && typeof user.role === 'object') {
+      const roleName = user.role.name || "Unknown Role";
+      const groupName = user.group?.name;
+
+      return groupName
+        ? `${roleName} (${groupName})`
+        : roleName;
+    }
+
+    // Handle case where role is a string
+    if (typeof user.role === 'string') {
+      return user.role;
+    }
+
+    return "Member";
+  };
+
   return (
     <>
       {" "}
@@ -63,7 +88,7 @@ export function NavUser({
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">{user.name}</span>
-                  <span className="truncate text-xs">{user.role}</span>
+                  <span className="truncate text-xs">{getRoleDisplayName()}</span>
                 </div>
                 <ChevronsUpDown className="ml-auto size-4" />
               </SidebarMenuButton>
@@ -85,7 +110,7 @@ export function NavUser({
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">{user.name}</span>
                     <span className="truncate text-xs">
-                      {user.role || "Member"}
+                      {getRoleDisplayName()}
                     </span>
                   </div>
                 </div>

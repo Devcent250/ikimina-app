@@ -65,31 +65,31 @@ const formSchema = z.object({
 });
 
 function UserForm({ isOpen, setIsOpen, refetch, record }) {
-  
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     values: record
-      ? { 
-          ...record, 
-          role: record.role?.toString() || (record.role?.id?.toString() || ""),
-          branchId: record.branchId?.toString() || (record.branch?.id?.toString() || ""),
-          groupId: record.groupId?.toString() || (record.group?.id?.toString() || ""),
-          password: ""
-        }
+      ? {
+        ...record,
+        role: record.role?.toString() || (record.role?.id?.toString() || ""),
+        branchId: record.branchId?.toString() || (record.branch?.id?.toString() || ""),
+        groupId: record.groupId?.toString() || (record.group?.id?.toString() || ""),
+        password: ""
+      }
       : {
-          name: "",
-          first_name: "",
-          last_name: "",
-          email: "",
-          password: "",
-          phone: "",
-          role: "",
-          branchId: "",
-          groupId: "",
-          status: "active",
-          isAdmin: false,
-          profileUrl: "",
-        },
+        name: "",
+        first_name: "",
+        last_name: "",
+        email: "",
+        password: "",
+        phone: "",
+        role: "",
+        branchId: "",
+        groupId: "",
+        status: "active",
+        isAdmin: false,
+        profileUrl: "",
+      },
   });
 
   const watchBranchId = form.watch("branchId");
@@ -98,11 +98,11 @@ function UserForm({ isOpen, setIsOpen, refetch, record }) {
     if (record && !values.password) {
       delete values.password;
     }
-    
+
     const q = record
       ? api.patch(`/users/${record.id}`, values)
       : api.post("/users", values);
-      
+
     try {
       await q;
       refetch();
@@ -169,7 +169,7 @@ function UserForm({ isOpen, setIsOpen, refetch, record }) {
               onSubmit={form.handleSubmit(onSubmit)}
               className="space-y-6 py-4 px-4"
             >
-              
+
               {/* User Information Section */}
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-2">
@@ -229,7 +229,7 @@ function UserForm({ isOpen, setIsOpen, refetch, record }) {
                   />
                 </div>
               </div>
-              
+
               {/* Contact Information */}
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-2">
@@ -273,7 +273,7 @@ function UserForm({ isOpen, setIsOpen, refetch, record }) {
                   />
                 </div>
               </div>
-              
+
               {/* Account Settings */}
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-2">
@@ -326,7 +326,7 @@ function UserForm({ isOpen, setIsOpen, refetch, record }) {
                   />
                 </div>
               </div>
-              
+
               {/* Permissions and Assignment */}
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-2">
@@ -351,8 +351,8 @@ function UserForm({ isOpen, setIsOpen, refetch, record }) {
                             </FormControl>
                             <SelectContent>
                               {roles?.map((role) => (
-                                <SelectItem 
-                                  key={role.id} 
+                                <SelectItem
+                                  key={role.id}
                                   value={role.id?.toString()}
                                 >
                                   {role.name}
@@ -406,8 +406,8 @@ function UserForm({ isOpen, setIsOpen, refetch, record }) {
                             </FormControl>
                             <SelectContent>
                               {branches?.map((branch) => (
-                                <SelectItem 
-                                  key={branch.id} 
+                                <SelectItem
+                                  key={branch.id}
                                   value={branch.id?.toString()}
                                 >
                                   {branch.name}
@@ -439,8 +439,8 @@ function UserForm({ isOpen, setIsOpen, refetch, record }) {
                             </FormControl>
                             <SelectContent>
                               {groups?.map((group) => (
-                                <SelectItem 
-                                  key={group.id} 
+                                <SelectItem
+                                  key={group.id}
                                   value={group.id?.toString()}
                                 >
                                   {group.name}
@@ -501,8 +501,8 @@ export default function SystemUsers() {
             table.getIsAllPageRowsSelected()
               ? true
               : table.getIsSomePageRowsSelected()
-              ? "indeterminate"
-              : false
+                ? "indeterminate"
+                : false
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label="Select all"
@@ -600,7 +600,7 @@ export default function SystemUsers() {
       cell: ({ row }) => {
         const role = row.original.role?.name || row.getValue("role");
         const isAdmin = row.original.isAdmin;
-        
+
         return (
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="font-normal">
@@ -657,7 +657,7 @@ export default function SystemUsers() {
           month: 'short',
           day: 'numeric'
         }).format(date);
-        
+
         return <div className="text-sm">{formattedDate}</div>;
       },
       enableSorting: true,

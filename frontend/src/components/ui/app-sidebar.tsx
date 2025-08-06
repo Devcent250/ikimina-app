@@ -41,7 +41,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         name: user?.name,
         email: user?.email,
         profileUrl: user?.profileUrl,
-        role: "Admin",
+        role: user?.role?.name || "Member",
+        isAdmin: user?.isAdmin,
       },
       teams: [{ name: "Vison Genes", id: "4567" }].map((e) => {
         return {

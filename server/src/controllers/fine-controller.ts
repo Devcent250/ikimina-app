@@ -237,7 +237,13 @@ export class FineController {
       const result = await this?.queryBuilder.buildAndExecute(
         req.query as QueryParams,
         [],
-        ["fines.member", "fines.group", "fines.branch", "fines.createdBy"]
+        ["fines.member", "fines.group", "fines.branch", "fines.createdBy"],
+        [
+          {
+            path: "fines.createdBy.group",
+            alias: "createdByGroup"
+          }
+        ]
       );
 
       res.json({

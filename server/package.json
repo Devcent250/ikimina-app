@@ -11,7 +11,8 @@
     "migration:run": "npx typeorm-ts-node-commonjs migration:run -d ./src/data-source.ts",
     "migration:revert": "npx typeorm-ts-node-commonjs  migration:revert -d ./src/data-source.ts",
     "db:seed": "npx ts-node src/scripts/seedPermissions.ts",
-    "db:seed:all": "yarn run db:seed && npm run db:seed"
+    "db:seed:all": "yarn run db:seed && npm run db:seed",
+    "create:president": "npx ts-node src/scripts/createPresidentUserCLI.ts"
   },
   "dependencies": {
     "axios": "^1.7.9",
@@ -42,7 +43,7 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.9.0",
     "cross-env": "^7.0.3",
-    "nodemon": "^3.1.7",
+    "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }

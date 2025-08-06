@@ -12,7 +12,7 @@ import { Group } from "./Group";
 import { Branch } from "./Branch";
 import { Contribution } from "./Contribution";
 import { Loan } from "./Loan";
-import { LoanVerification } from "./LoanVerification";
+
 import { Fine } from "./Fine";
 
 @Entity("group_members")
@@ -44,8 +44,7 @@ export class GroupMember extends BaseEntity {
   @OneToMany(() => Loan, (loan) => loan.groupMember)
   loans: Loan[];
 
-  @OneToMany(() => LoanVerification, (verification) => verification.groupMember)
-  loanVerifications: LoanVerification[];
+  // Removed loanVerifications relation as LoanVerification doesn't have a groupMember property
 
   @OneToMany(() => Fine, (fine) => fine.groupMember)
   fines: Fine[];

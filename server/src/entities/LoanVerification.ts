@@ -8,7 +8,6 @@ import {
 } from "typeorm";
 import { Loan } from "./Loan";
 import { Member } from "./Member";
-import { GroupMember } from "./GroupMember";
 
 @Entity("loan_verifications")
 export class LoanVerification extends BaseEntity {
@@ -23,9 +22,7 @@ export class LoanVerification extends BaseEntity {
   @JoinColumn()
   member: Member;
 
-  @ManyToOne(() => GroupMember, (groupMember) => groupMember.loanVerifications)
-  @JoinColumn()
-  groupMember: GroupMember;
+
 
   @Column({ nullable: true })
   notes: string;

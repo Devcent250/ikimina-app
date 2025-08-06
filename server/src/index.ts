@@ -23,6 +23,7 @@ import contributionRoutes from "./routes/contributions.routes";
 import fineRoutes from "./routes/fines.routes";
 import loanRoutes from "./routes/loans.routes";
 import loanPaymentRoutes from "./routes/loan-payment.routes";
+import loanVerificationRoutes from "./routes/loan-verification.routes";
 import attendanceRoutes from "./routes/attendances.routes";
 import expenseCategoryRoutes from "./routes/expense-category.routes";
 import expenseRoutes from "./routes/expenses.routes";
@@ -42,7 +43,7 @@ const delayMiddleware = (_: any, __: any, next: any) => {
 const app = express();
 
 app.use(cors({
-  origin:"*"
+  origin: "*"
 }));
 app.use(express.json());
 app.use(morgan("tiny"));
@@ -74,6 +75,7 @@ app.use("/api/groups/:groupId/attendance", authorization, attendanceRoutes);
 app.use("/api/groups/:groupId/expenses", authorization, expenseRoutes);
 
 app.use("/api/loans/:loanId/payments", authorization, loanPaymentRoutes);
+app.use("/api", authorization, loanVerificationRoutes);
 
 app.use("/api/branches/:branchId/groups", authorization, groupRoutes);
 app.use("/api/branches/:branchId/members", authorization, memberRoutes);
@@ -181,7 +183,7 @@ AppDataSource.initialize()
         .then(() => console.log("✅ Migrations complete"))
         .catch((err) => {
           console.error("❌ Migration failed", err);
-          process.exit(1); 
+          process.exit(1);
         });
     }
 

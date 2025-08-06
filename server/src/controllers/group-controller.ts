@@ -41,6 +41,7 @@ export class GroupController {
   private format = (group: Group) => {
     return {
       ...group,
+      members: group.groupMembers?.length || 0,
     };
   };
 
@@ -184,7 +185,7 @@ export class GroupController {
 
   getMyGroup = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      console.log("user==",req.user)
+      console.log("user==", req.user)
       if (!req.user || !req.user.id) {
         return next(new Error("Authentication required"));
       }
@@ -240,6 +241,7 @@ export class GroupController {
           "branch.district",
           "groupMembers",
           "groupMembers.member",
+          "groupMembers.branch",
           "contributions",
           "contributions.member",
           "loans",
@@ -293,6 +295,7 @@ export class GroupController {
           "secretary",
           "branch",
           "groupMembers",
+          "groupMembers.branch",
           "contributions",
           "loans",
           "fines",
@@ -396,21 +399,38 @@ export class GroupController {
 
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const result = await this?.queryBuilder.buildAndExecute(
-        req.query as QueryParams,
-        [],
-        [
-          "groups.branch",
-          "groups.groupMembers",
-          "groups.president",
-          "groups.accountant",
-          "groups.secretary",
-        ]
-      );
+      // Use direct query to ensure groupMembers are loaded
+      const groups = await this.repository.find({
+        relations: [
+          "branch",
+          "groupMembers",
+          "groupMembers.branch",
+          "president",
+          "accountant",
+          "secretary",
+        ],
+      });
+
+      // Add debugging
+      console.log("Raw groups data:", groups.map(group => ({
+        id: group.id,
+        name: group.name,
+        groupMembersCount: group.groupMembers?.length || 0,
+        groupMembers: group.groupMembers
+      })));
+
+      const formattedResults = groups.map(this.format);
+
+      // Add debugging for formatted results
+      console.log("Formatted groups data:", formattedResults.map(group => ({
+        id: group.id,
+        name: group.name,
+        members: group.members
+      })));
 
       res.json({
-        ...result,
-        results: result.results.map(this.format),
+        results: formattedResults,
+        total: groups.length,
       });
     }
   );
@@ -423,6 +443,7 @@ export class GroupController {
         where: { id: Number(recordId) },
         relations: [
           "groupMembers",
+          "groupMembers.branch",
           "contributions",
           "loans",
           "fines",

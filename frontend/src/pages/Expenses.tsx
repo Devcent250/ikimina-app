@@ -63,24 +63,24 @@ function ExpenseForm({ isOpen, setIsOpen, refetch, record }) {
     resolver: zodResolver(formSchema),
     values: record
       ? {
-          ...record,
-          groupId: record.groupId?.toString(),
-          expenseCategoryId: record.expenseCategoryId?.toString(),
-          paymentMethodId: record.paymentMethodId?.toString(),
-          branchId: record.branchId?.toString(),
-          amount: record.amount?.toString(),
-        }
+        ...record,
+        groupId: record.groupId?.toString(),
+        expenseCategoryId: record.expenseCategoryId?.toString(),
+        paymentMethodId: record.paymentMethodId?.toString(),
+        branchId: record.branchId?.toString(),
+        amount: record.amount?.toString(),
+      }
       : {
-          name: "",
-          amount: 0,
-          groupId: "",
-          seasonId: "",
-          expenseCategoryId: "",
-          paymentMethodId: "",
-          branchId: "",
-          notes: "",
-          attachment: "",
-        },
+        name: "",
+        amount: 0,
+        groupId: "",
+        seasonId: "",
+        expenseCategoryId: "",
+        paymentMethodId: "",
+        branchId: "",
+        notes: "",
+        attachment: "",
+      },
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
@@ -512,9 +512,25 @@ export default function Expenses() {
         <DataTableColumnHeader column={column} title="Created By" />
       ),
       cell: ({ row }) => {
+        const createdBy = row.original.createdBy;
+        if (!createdBy) {
+          return (
+            <div className="flex items-center gap-3">
+              N/A
+            </div>
+          );
+        }
+
+        const roleName = createdBy.role?.name || "Unknown Role";
+        const groupName = createdBy.group?.name;
+
+        const displayText = groupName
+          ? `${roleName} (${groupName})`
+          : roleName;
+
         return (
           <div className="flex items-center gap-3">
-            {row.getValue("createdBy")}
+            {displayText}
           </div>
         );
       },
@@ -614,7 +630,7 @@ export default function Expenses() {
             season: e.season?.name,
             expenseCategory: e.expenseCategory?.name,
             paymentMethod: e.paymentMethod?.name,
-            createdBy: e.createdBy?.name,
+            createdBy: e.createdBy,
             groupId: e.group?.id,
             seasonId: e.season?.id,
             expenseCategoryId: e.expenseCategory?.id,

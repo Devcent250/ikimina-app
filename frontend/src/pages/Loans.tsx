@@ -67,23 +67,23 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
     resolver: zodResolver(formSchema),
     values: record
       ? {
-          ...record,
-          branchId: record.branchId?.toString(),
-          groupId: record.groupId?.toString(),
-          amount: record.amount?.toString(),
-          interestRate: record.interestRate?.toString(),
-        }
+        ...record,
+        branchId: record.branchId?.toString(),
+        groupId: record.groupId?.toString(),
+        amount: record.amount?.toString(),
+        interestRate: record.interestRate?.toString(),
+      }
       : {
-          amount: "0",
-          groupMemberId: undefined,
-          groupId: "",
-          loanType: "",
-          paymentFrequency: "",
-          interestRate: "",
-          loanTerms: "",
-          branchId: "",
-          attachment: "",
-        },
+        amount: "0",
+        groupMemberId: undefined,
+        groupId: "",
+        loanType: "",
+        paymentFrequency: "",
+        interestRate: "",
+        loanTerms: "",
+        branchId: "",
+        attachment: "",
+      },
   });
 
   const { user } = useAuth();
@@ -431,8 +431,8 @@ export default function Loans() {
             table.getIsAllPageRowsSelected()
               ? true
               : table.getIsSomePageRowsSelected()
-              ? "indeterminate"
-              : false
+                ? "indeterminate"
+                : false
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label="Select all"

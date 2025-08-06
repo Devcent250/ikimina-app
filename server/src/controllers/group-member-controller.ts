@@ -38,6 +38,7 @@ export class GroupMemberController {
   private format = (groupMember: GroupMember) => {
     return {
       ...groupMember,
+      loanEligibility: groupMember.loanEligibility, // ensure this is always present
     };
   };
 
@@ -134,7 +135,7 @@ export class GroupMemberController {
 
       let groupMember = await this.repository.findOne({
         where: { id: Number(recordId) },
-        relations: ["group"],
+        relations: ["group", "branch"],
       });
 
       if (!groupMember) {
@@ -187,7 +188,7 @@ export class GroupMemberController {
             parameters: { groupId: groupId },
           },
         ],
-        ["groupMembers.member", "groupMembers.group","groupMembers.branch"]
+        ["groupMembers.member", "groupMembers.group", "groupMembers.branch"]
       );
       console.log("results==", {
         ...result,
@@ -206,7 +207,7 @@ export class GroupMemberController {
 
       const groupMember = await this.repository.findOne({
         where: { id: Number(recordId) },
-        relations: ["contributions", "loans"],
+        relations: ["contributions", "loans", "branch"],
       });
 
       if (!groupMember) {

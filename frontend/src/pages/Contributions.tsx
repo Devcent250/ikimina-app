@@ -110,28 +110,28 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
     resolver: zodResolver(formSchema),
     values: record
       ? {
-          ...record,
-          totalAmount: (
-            Number(record.depositAmount) + Number(record.solidarityAmount)
-          ).toString(),
-          depositAmount: record.depositAmount?.toString(),
-          solidarityAmount: record.solidarityAmount?.toString(),
-          groupMemberId: record.groupMemberId,
-          groupId: record.groupId?.toString(),
-          paymentMethodId: record.paymentMethodId?.toString(),
-          branchId: record.branchId?.toString(),
-          contributionType: record.depositAmount > 0 ? "saving" : "solidarity",
-        }
+        ...record,
+        totalAmount: (
+          Number(record.depositAmount) + Number(record.solidarityAmount)
+        ).toString(),
+        depositAmount: record.depositAmount?.toString(),
+        solidarityAmount: record.solidarityAmount?.toString(),
+        groupMemberId: record.groupMemberId,
+        groupId: record.groupId?.toString(),
+        paymentMethodId: record.paymentMethodId?.toString(),
+        branchId: record.branchId?.toString(),
+        contributionType: record.depositAmount > 0 ? "saving" : "solidarity",
+      }
       : {
-          totalAmount: "0",
-          depositAmount: "0",
-          solidarityAmount: "0",
-          groupMemberId: undefined,
-          groupId: "",
-          paymentMethodId: "",
-          branchId: "",
-          contributionType: undefined,
-        },
+        totalAmount: "0",
+        depositAmount: "0",
+        solidarityAmount: "0",
+        groupMemberId: undefined,
+        groupId: "",
+        paymentMethodId: "",
+        branchId: "",
+        contributionType: undefined,
+      },
   });
 
   const { user } = useAuth();
@@ -404,8 +404,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
         // Show validation for minimum shares
         if (shares < minShares) {
           toast.error(
-            `Minimum ${minShares} shares required (${
-              minShares * pricePerShare
+            `Minimum ${minShares} shares required (${minShares * pricePerShare
             } deposit)`
           );
         }
@@ -434,18 +433,16 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
     if (shares < minShares) {
       return {
         isValid: false,
-        message: `Minimum ${minShares} shares required (${
-          minShares * pricePerShare
-        } deposit)`,
+        message: `Minimum ${minShares} shares required (${minShares * pricePerShare
+          } deposit)`,
       };
     }
 
     if (shares > maxShares) {
       return {
         isValid: false,
-        message: `Maximum ${maxShares} shares allowed (${
-          maxShares * pricePerShare
-        } deposit)`,
+        message: `Maximum ${maxShares} shares allowed (${maxShares * pricePerShare
+          } deposit)`,
       };
     }
 
@@ -477,8 +474,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
 
       if (shares < minShares) {
         toast.error(
-          `Minimum ${minShares} shares required (${
-            minShares * pricePerShare
+          `Minimum ${minShares} shares required (${minShares * pricePerShare
           } deposit)`
         );
         return;
@@ -486,8 +482,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
 
       if (shares > maxShares) {
         toast.error(
-          `Maximum ${maxShares} shares allowed (${
-            maxShares * pricePerShare
+          `Maximum ${maxShares} shares allowed (${maxShares * pricePerShare
           } deposit)`
         );
         return;
@@ -759,11 +754,10 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                       </li>
                     </div>
                     <li
-                      className={`${
-                        shareValidation?.isValid
-                          ? "text-green-500"
-                          : "text-red-600"
-                      }`}
+                      className={`${shareValidation?.isValid
+                        ? "text-green-500"
+                        : "text-red-600"
+                        }`}
                     >
                       Current selection: {numberOfShares} shares (
                       {shareValidation?.message})
@@ -958,8 +952,8 @@ export default function Contributions() {
                 operator: "in",
                 value: Array.isArray(filter.value)
                   ? filter.value.map((v) =>
-                      typeof v === "object" ? v.value : v
-                    )
+                    typeof v === "object" ? v.value : v
+                  )
                   : [filter.value],
               };
             }
@@ -1075,8 +1069,8 @@ export default function Contributions() {
             table.getIsAllPageRowsSelected()
               ? true
               : table.getIsSomePageRowsSelected()
-              ? "indeterminate"
-              : false
+                ? "indeterminate"
+                : false
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label="Select all"
@@ -1541,18 +1535,18 @@ export default function Contributions() {
                       </div>
                       {contributionDetailsQuery.data.paymentMethod
                         ?.accountNumber && (
-                        <div>
-                          <p className="text-sm text-muted-foreground">
-                            Account Number
-                          </p>
-                          <p className="font-medium">
-                            {
-                              contributionDetailsQuery.data.paymentMethod
-                                .accountNumber
-                            }
-                          </p>
-                        </div>
-                      )}
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              Account Number
+                            </p>
+                            <p className="font-medium">
+                              {
+                                contributionDetailsQuery.data.paymentMethod
+                                  .accountNumber
+                              }
+                            </p>
+                          </div>
+                        )}
                       <div>
                         <p className="text-sm text-muted-foreground">
                           Received By
@@ -1696,16 +1690,15 @@ export default function Contributions() {
                         <Badge
                           variant={
                             contributionDetailsQuery.data.season?.status ===
-                            "active"
+                              "active"
                               ? "default"
                               : "secondary"
                           }
-                          className={`${
-                            contributionDetailsQuery.data.season?.status ===
+                          className={`${contributionDetailsQuery.data.season?.status ===
                             "active"
-                              ? "bg-green-100 text-green-600"
-                              : "bg-red-100 text-red-600"
-                          } shadow-none`}
+                            ? "bg-green-100 text-green-600"
+                            : "bg-red-100 text-red-600"
+                            } shadow-none`}
                         >
                           {contributionDetailsQuery.data.season?.status}
                         </Badge>

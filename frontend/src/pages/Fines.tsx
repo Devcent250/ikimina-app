@@ -63,20 +63,20 @@ function FineForm({ isOpen, setIsOpen, refetch, record }) {
     resolver: zodResolver(formSchema),
     values: record
       ? {
-          ...record,
-          branchId: record.branchId?.toString(),
-          amount: record.amount?.toString(),
-          groupMemberId: record.groupMemberId?.toString(),
-          groupId: record.groupId?.toString(),
-        }
+        ...record,
+        branchId: record.branchId?.toString(),
+        amount: record.amount?.toString(),
+        groupMemberId: record.groupMemberId?.toString(),
+        groupId: record.groupId?.toString(),
+      }
       : {
-          amount: "0",
-          groupMemberId: undefined,
-          reason: "",
-          branchId: "",
-          groupId: "",
-          notes: "",
-        },
+        amount: "0",
+        groupMemberId: undefined,
+        reason: "",
+        branchId: "",
+        groupId: "",
+        notes: "",
+      },
   });
 
   const { user } = useAuth();
@@ -373,8 +373,8 @@ export default function Fines() {
             table.getIsAllPageRowsSelected()
               ? true
               : table.getIsSomePageRowsSelected()
-              ? "indeterminate"
-              : false
+                ? "indeterminate"
+                : false
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label="Select all"
@@ -489,9 +489,25 @@ export default function Fines() {
         <DataTableColumnHeader column={column} title="Created By" />
       ),
       cell: ({ row }) => {
+        const createdBy = row.original.createdBy;
+        if (!createdBy) {
+          return (
+            <div className="flex items-center gap-3 truncate">
+              N/A
+            </div>
+          );
+        }
+
+        const roleName = createdBy.role?.name || "Unknown Role";
+        const groupName = createdBy.group?.name;
+
+        const displayText = groupName
+          ? `${roleName} (${groupName})`
+          : roleName;
+
         return (
           <div className="flex items-center gap-3 truncate">
-            {row.getValue("createdBy")}
+            {displayText}
           </div>
         );
       },
@@ -590,7 +606,7 @@ export default function Fines() {
             member: e?.member?.fullNames,
             branch: e?.branch?.name,
             group: e?.group?.name,
-            createdBy: e?.createdBy?.name,
+            createdBy: e?.createdBy,
             createdAt: new Date(e?.createdAt).toLocaleDateString(),
             memberId: e?.member?.id,
             branchId: e?.branch?.id,

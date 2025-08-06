@@ -291,23 +291,32 @@ export class LoanController {
 
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const result = await this?.queryBuilder.buildAndExecute(
-        req.query as QueryParams,
-        [],
-        [
-          "loans.member",
-          "loans.groupMember",
-          "loans.group",
-          "loans.createdBy",
-          "loans.payments",
-          "loans.branch",
-        ]
-      );
+      try {
+        console.log("Request query:", req.query);
 
-      res.json({
-        ...result,
-        results: result.results.map(this.format),
-      });
+        const result = await this?.queryBuilder.buildAndExecute(
+          req.query as QueryParams,
+          [],
+          [
+            "loans.member",
+            "loans.groupMember",
+            "loans.group",
+            "loans.createdBy",
+            "loans.payments",
+            "loans.branch",
+          ]
+        );
+
+        console.log("Query result:", result);
+
+        res.json({
+          ...result,
+          results: result.results.map(this.format),
+        });
+      } catch (error) {
+        console.error("Error in getAll loans:", error);
+        next(error);
+      }
     }
   );
 

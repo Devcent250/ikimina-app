@@ -260,6 +260,7 @@ export class ExpenseController {
           "expenses.expenseCategory",
           "expenses.paymentMethod",
           "expenses.createdBy",
+          "expenses.createdBy.group",
           "expenses.branch",
         ]
       );
