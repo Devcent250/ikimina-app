@@ -133,6 +133,9 @@ export class GroupMemberController {
     async (req: Request, res: Response, next: NextFunction) => {
       const { recordId } = req.params;
 
+      console.log("GroupMember update - Request body:", req.body);
+      console.log("GroupMember update - Record ID:", recordId);
+
       let groupMember = await this.repository.findOne({
         where: { id: Number(recordId) },
         relations: ["group", "branch"],
@@ -142,8 +145,17 @@ export class GroupMemberController {
         return next(new NotFoundError("Group membership not found"));
       }
 
+      console.log("GroupMember update - Current groupMember:", {
+        id: groupMember.id,
+        numberOfShares: groupMember.numberOfShares,
+        loanEligibility: groupMember.loanEligibility,
+        group: groupMember.group?.name,
+        minShares: groupMember.group?.minShares,
+        maxShares: groupMember.group?.maxShares
+      });
+
       // Validate shares against group min/max if changing
-      if (req.body.numberOfShares !== undefined) {
+      if (req.body.numberOfShares !== undefined && req.body.numberOfShares !== null) {
         if (req.body.numberOfShares < groupMember.group.minShares) {
           return next(
             new BadRequestError(

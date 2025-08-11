@@ -12,6 +12,7 @@ import { Contribution } from "../entities/Contribution";
 import { Loan } from "../entities/Loan";
 import { QueryParams } from "../types/QueryParams";
 import { Branch } from "../entities/Branch";
+import { User } from "../entities/User";
 
 export class FineController {
   private repository: Repository<Fine> = AppDataSource.getRepository(Fine);
@@ -98,6 +99,11 @@ export class FineController {
         }
       }
 
+      // Fetch the user entity for createdBy
+      let createdByUser = undefined;
+      if (req?.user?.id) {
+        createdByUser = await AppDataSource.getRepository(User).findOne({ where: { id: req.user.id } });
+      }
       // Create new fine
       const newFine = this.repository.create({
         groupMember,
@@ -108,9 +114,7 @@ export class FineController {
         amount,
         branch,
         member: groupMember.member,
-        createdBy: {
-          id: req?.user?.id,
-        },
+        createdBy: createdByUser,
       });
 
       const savedFine = await this.repository.save(newFine);
@@ -234,16 +238,12 @@ export class FineController {
 
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
+      // Only join member, group, and createdBy for list view (avoid deep joins for speed)
       const result = await this?.queryBuilder.buildAndExecute(
         req.query as QueryParams,
         [],
-        ["fines.member", "fines.group", "fines.branch", "fines.createdBy"],
-        [
-          {
-            path: "fines.createdBy.group",
-            alias: "createdByGroup"
-          }
-        ]
+        ["fines.member", "fines.group", "fines.createdBy"],
+        []
       );
 
       res.json({

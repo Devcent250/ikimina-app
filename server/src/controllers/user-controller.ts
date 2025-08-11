@@ -9,10 +9,11 @@ import * as bcrypt from "bcryptjs";
 import { QueryParams } from "../types/QueryParams";
 import { Group } from "../entities/Group";
 import { Branch } from "../entities/Branch";
+import { Member } from "../entities/Member";
 
 export class UserController {
   private repository: Repository<User> = AppDataSource.getRepository(User);
-  private groupRepository: Repository<Group> = AppDataSource.getRepository(Group); 
+  private groupRepository: Repository<Group> = AppDataSource.getRepository(Group);
   private branchRepository: Repository<Branch> = AppDataSource.getRepository(Branch);
   private queryBuilder: QueryBuilder<User>;
 
@@ -25,14 +26,23 @@ export class UserController {
       defaultOrder: "DESC",
       searchableFields: ["username", "names", "email"],
       allowedSortFields: ["createdAt", "updatedAt", "username"],
-      filterableFields: ["role", "branch","group"],
+      filterableFields: ["role", "branch", "group"],
     });
   }
 
   private format = (user: User) => {
     const { password, ...userWithoutPassword } = user;
+    let displayRole = null;
+    if (user.role && user.role.name) {
+      displayRole = user.role.name;
+    } else if (user.email) {
+      // Synchronous hack: in getAll, this will be called in a map, so we can't await here.
+      // We'll patch getAll to do the async lookup and pass displayRole in.
+      displayRole = null; // fallback, will be set in getAll
+    }
     return {
       ...userWithoutPassword,
+      displayRole,
     };
   };
 
@@ -43,7 +53,7 @@ export class UserController {
       const branch = await this.branchRepository.findOne({
         where: { id: Number(req.body.branchId) }
       });
-      
+
       if (!branch) {
         return next(new BadRequestError("Branch not found"));
       }
@@ -52,7 +62,7 @@ export class UserController {
         where: { id: Number(req.body.groupId), branch: { id: branch.id } },
         relations: ["branch"]
       });
-      
+
       if (!group) {
         return next(new BadRequestError("Group not found or does not belong to the specified branch"));
       }
@@ -68,7 +78,7 @@ export class UserController {
         branch: { id: branch.id },
         group: { id: group.id }
       });
-      const savedUser:any = await this.repository.save(newUser);
+      const savedUser: any = await this.repository.save(newUser);
 
 
       const userWithRelations = await this.repository.findOne({
@@ -90,7 +100,7 @@ export class UserController {
 
       const user = await this.repository.findOne({
         where: { id: Number(recordId) },
-        relations: ["role", "branch","group"],
+        relations: ["role", "branch", "group"],
       });
 
       if (!user) {
@@ -115,7 +125,7 @@ export class UserController {
 
       let user = await this.repository.findOne({
         where: { id: Number(recordId) },
-        relations:["role","branch","group"]
+        relations: ["role", "branch", "group"]
       });
 
       if (!user) {
@@ -126,7 +136,7 @@ export class UserController {
         const branch = await this.branchRepository.findOne({
           where: { id: Number(req.body.branchId) }
         });
-        
+
         if (!branch) {
           return next(new BadRequestError("Branch not found"));
         }
@@ -134,19 +144,19 @@ export class UserController {
 
       if (req.body.groupId) {
         const branchId = req.body.branchId || (user.branch ? user.branch.id : null);
-        
+
         if (!branchId) {
           return next(new BadRequestError("Branch must be specified when updating group"));
         }
-        
+
         const group = await this.groupRepository.findOne({
-          where: { 
-            id: Number(req.body.groupId), 
-            branch: { id: branchId } 
+          where: {
+            id: Number(req.body.groupId),
+            branch: { id: branchId }
           },
           relations: ["branch"]
         });
-        
+
         if (!group) {
           return next(new BadRequestError("Group not found or does not belong to the specified branch"));
         }
@@ -177,12 +187,39 @@ export class UserController {
       const result = await this?.queryBuilder.buildAndExecute(
         req.query as QueryParams,
         [],
-        ["users.role","users.branch","users.group"]
+        ["users.role", "users.branch", "users.group"]
       );
-
+      // Enhance: lookup group leader roles for users with no role
+      const memberRepo = AppDataSource.getRepository(Member);
+      const groupRepo = AppDataSource.getRepository(Group);
+      const users = result.results;
+      // Build a map of email -> member
+      const emails = users.map(u => u.email).filter(Boolean);
+      const members = await memberRepo.find({ where: emails.map(email => ({ email })) });
+      // Get all groups with their leaders
+      const groups = await groupRepo.find({ relations: ["president", "accountant", "secretary"] });
+      const memberIdToLeaderRole = {};
+      groups.forEach(group => {
+        if (group.president) memberIdToLeaderRole[group.president.id] = "President";
+        if (group.accountant) memberIdToLeaderRole[group.accountant.id] = "Accountant";
+        if (group.secretary) memberIdToLeaderRole[group.secretary.id] = "Secretary";
+      });
+      // Map users to displayRole
+      const emailToMember = {};
+      members.forEach(m => { emailToMember[m.email] = m; });
+      const formatted = users.map(u => {
+        let displayRole = null;
+        if (u.role && u.role.name) {
+          displayRole = u.role.name;
+        } else if (u.email && emailToMember[u.email]) {
+          const member = emailToMember[u.email];
+          displayRole = memberIdToLeaderRole[member.id] || null;
+        }
+        return { ...u, displayRole };
+      });
       res.json({
         ...result,
-        results: result.results.map(this.format),
+        results: formatted,
       });
     }
   );

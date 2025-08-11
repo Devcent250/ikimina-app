@@ -4,8 +4,14 @@ export const createGroupSchema = Joi.object({
   name: Joi.string().required(),
   description: Joi.string().optional().allow("").allow(null),
   presidentId: Joi.number().optional(),
+  presidentEmail: Joi.string().email().optional(),
+  presidentPassword: Joi.string().optional(),
   accountantId: Joi.number().optional(),
+  accountantEmail: Joi.string().email().optional(),
+  accountantPassword: Joi.string().optional(),
   secretaryId: Joi.number().optional(),
+  secretaryEmail: Joi.string().email().optional(),
+  secretaryPassword: Joi.string().optional(),
   meetingFrequency: Joi.string()
     .valid("Weekly", "Bi-weekly", "Monthly", "Quarterly")
     .default("Monthly"),
@@ -38,17 +44,17 @@ export const createGroupSchema = Joi.object({
   // Validate that end time is after start time
   const start = new Date(`2000-01-01T${obj.meetingStartTime}`);
   const end = new Date(`2000-01-01T${obj.meetingEndTime}`);
-  
+
   if (end <= start) {
     return helpers.error('any.invalid', { message: 'Meeting end time must be after start time' });
   }
-  
+
   // Validate that duration matches start and end times
   const durationMinutes = (end.getTime() - start.getTime()) / (1000 * 60);
   if (durationMinutes !== obj.meetingDurationMinutes) {
     return helpers.error('any.invalid', { message: 'Meeting duration must match start and end times' });
   }
-  
+
   return obj;
 });
 
@@ -57,8 +63,14 @@ export const updateGroupSchema = createGroupSchema.fork(
     "name",
     "description",
     "presidentId",
+    "presidentEmail",
+    "presidentPassword",
     "accountantId",
+    "accountantEmail",
+    "accountantPassword",
     "secretaryId",
+    "secretaryEmail",
+    "secretaryPassword",
     "meetingFrequency",
     "meetingDay",
     "meetingStartTime",

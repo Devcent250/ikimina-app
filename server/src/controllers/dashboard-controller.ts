@@ -10,6 +10,7 @@ import { Branch } from "../entities/Branch";
 import { Season } from "../entities/Season";
 import { Contribution } from "../entities/Contribution";
 import { LoanPayment } from "../entities/LoanPayment";
+import { GroupMember } from "../entities/GroupMember";
 
 export class DashboardController {
   private userRepository: Repository<User> = AppDataSource.getRepository(User);
@@ -64,12 +65,12 @@ export class DashboardController {
 
         const currentSeasonSavings = currentSeason
           ? await this.contributionRepository
-              .createQueryBuilder("contributions")
-              .where("contributions.seasonId = :seasonId", {
-                seasonId: currentSeason.id,
-              })
-              .select("SUM(contributions.depositAmount)", "total")
-              .getRawOne()
+            .createQueryBuilder("contributions")
+            .where("contributions.seasonId = :seasonId", {
+              seasonId: currentSeason.id,
+            })
+            .select("SUM(contributions.depositAmount)", "total")
+            .getRawOne()
           : { total: 0 };
 
         // Loans Balance calculated by subtracting total repaid from total loan amount
@@ -146,30 +147,46 @@ export class DashboardController {
         .createQueryBuilder("seasons")
         .where("seasons.status = :status", { status: "active" })
         .getOne();
-      const groupSavings = await this.groupRepository
-        .createQueryBuilder("groups")
-        .leftJoin("groups.contributions", "contributions")
-        .leftJoin("groups.branch", "branch")
-        .leftJoin("groups.groupMembers", "members") // Add this join for members
-        .where("contributions.seasonId = :seasonId", {
-          seasonId: currentSeason?.id,
-        })
+      // Correct calculation: sum contributions per group, get member count separately
+      const groupSavings = await AppDataSource.getRepository(Contribution)
+        .createQueryBuilder("contributions")
+        .leftJoin("contributions.group", "group")
+        .leftJoin("group.branch", "branch")
+        .where("contributions.seasonId = :seasonId", { seasonId: currentSeason?.id })
         .select([
-          `groups.id as "groupId"`,
-          `groups.name as "groupName"`,
+          `group.id as "groupId"`,
+          `group.name as "groupName"`,
           `branch.id as "branchId"`,
           `branch.name as "branchName"`,
-          `AVG(contributions.depositAmount) as "averageSavings"`,
           `SUM(contributions.depositAmount) as "totalSavings"`,
-          `COUNT(DISTINCT contributions.id) as "contributionCount"`,
-          `COUNT(DISTINCT members.id) as "totalMembers"`, // Count distinct members
+          `COUNT(DISTINCT contributions.id) as "contributionCount"`
         ])
-        .groupBy("groups.id, groups.name, branch.id, branch.name")
+        .groupBy("group.id, group.name, branch.id, branch.name")
         .getRawMany();
+
+      // Get member count separately
+      const memberCounts = await AppDataSource.getRepository(GroupMember)
+        .createQueryBuilder("members")
+        .leftJoin("members.group", "group")
+        .select([
+          `group.id as "groupId"`,
+          `COUNT(members.id) as "totalMembers"`
+        ])
+        .groupBy("group.id")
+        .getRawMany();
+
+      // Merge member count into groupSavings
+      const savingsWithMembers = groupSavings.map(gs => {
+        const member = memberCounts.find(mc => mc.groupId === gs.groupId);
+        return {
+          ...gs,
+          totalMembers: member ? member.totalMembers : 0
+        };
+      });
 
       res.status(200).json({
         status: "success",
-        data: groupSavings,
+        data: savingsWithMembers,
       });
     }
   );
@@ -214,6 +231,138 @@ export class DashboardController {
         status: "success",
         data: result,
       });
+    }
+  );
+
+  getLoanReports = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        console.log("Fetching loan reports...");
+
+        // Total Loans
+        const totalLoans = await this.loanRepository
+          .createQueryBuilder("loans")
+          .getCount();
+
+        console.log("Total loans:", totalLoans);
+
+        // Active Loans (approved status)
+        const activeLoans = await this.loanRepository
+          .createQueryBuilder("loans")
+          .where("loans.status = :status", { status: "approved" })
+          .getCount();
+
+        console.log("Active loans:", activeLoans);
+
+        // Pending Approval Loans
+        const pendingLoans = await this.loanRepository
+          .createQueryBuilder("loans")
+          .where("loans.status = :status", { status: "pending" })
+          .getCount();
+
+        console.log("Pending loans:", pendingLoans);
+
+        // Total Loan Amount
+        const totalLoanAmount = await this.loanRepository
+          .createQueryBuilder("loans")
+          .select("SUM(loans.amount)", "total")
+          .getRawOne();
+
+        console.log("Total loan amount:", totalLoanAmount);
+
+        // Total Repaid Amount
+        const totalRepaidAmount = await this.loanPaymentRepository
+          .createQueryBuilder("loanPayments")
+          .select("SUM(loanPayments.amount)", "total")
+          .getRawOne();
+
+        console.log("Total repaid amount:", totalRepaidAmount);
+
+        // Recent Loan Activity (last 10 loans)
+        const recentLoans = await this.loanRepository
+          .createQueryBuilder("loans")
+          .leftJoin("loans.member", "member")
+          .select([
+            "loans.id",
+            "loans.amount",
+            "loans.status",
+            "loans.loanType",
+            "loans.createdAt",
+            "member.firstName",
+            "member.lastName"
+          ])
+          .orderBy("loans.createdAt", "DESC")
+          .limit(10)
+          .getMany();
+
+        console.log("Recent loans count:", recentLoans.length);
+
+        // Calculate percentage changes (simplified - you can enhance this with actual month-over-month data)
+        const activePercentage = totalLoans > 0 ? (activeLoans / totalLoans) * 100 : 0;
+        const pendingPercentage = totalLoans > 0 ? (pendingLoans / totalLoans) * 100 : 0;
+
+        const responseData = {
+          totalLoans,
+          activeLoans,
+          pendingLoans,
+          totalAmount: Number(totalLoanAmount?.total || 0),
+          totalRepaid: Number(totalRepaidAmount?.total || 0),
+          activePercentage: Math.round(activePercentage),
+          pendingPercentage: Math.round(pendingPercentage),
+          recentLoans: recentLoans.map(loan => ({
+            id: loan.id,
+            memberName: `${loan.member?.firstName || ''} ${loan.member?.lastName || ''}`.trim(),
+            loanType: loan.loanType,
+            amount: loan.amount,
+            status: loan.status,
+            createdAt: loan.createdAt
+          }))
+        };
+
+        console.log("Response data:", responseData);
+
+        res.status(200).json({
+          status: "success",
+          data: responseData,
+        });
+      } catch (error) {
+        console.error("Error in getLoanReports:", error);
+        next(error);
+      }
+    }
+  );
+
+  // Test endpoint to check if loans table has data
+  testLoansData = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        console.log("Testing loans data...");
+
+        // Check if we can connect to the loans table
+        const allLoans = await this.loanRepository.find();
+        console.log("All loans found:", allLoans.length);
+
+        // Get a sample loan
+        const sampleLoan = await this.loanRepository.findOne({
+          relations: ["member"]
+        });
+
+        res.status(200).json({
+          status: "success",
+          data: {
+            totalLoans: allLoans.length,
+            sampleLoan: sampleLoan ? {
+              id: sampleLoan.id,
+              amount: sampleLoan.amount,
+              status: sampleLoan.status,
+              memberName: sampleLoan.member ? `${sampleLoan.member.firstName} ${sampleLoan.member.lastName}` : 'No member'
+            } : null
+          },
+        });
+      } catch (error) {
+        console.error("Error in testLoansData:", error);
+        next(error);
+      }
     }
   );
 }

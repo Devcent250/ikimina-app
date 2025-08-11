@@ -2,9 +2,7 @@ import Joi from "joi";
 
 export const createLoanSchema = Joi.object({
   groupMemberId: Joi.number().required(),
-  loanType: Joi.string()
-    .valid("Emergency", "Business", "Education", "Other")
-    .required(),
+  loanType: Joi.string().required(), // Accept any string (loan category ID)
   amount: Joi.number().precision(2).positive().required(),
   loanTerms: Joi.string().required(),
   interestRate: Joi.number().precision(2).min(0).max(100).required(),
@@ -34,3 +32,8 @@ export const updateLoanSchema = createLoanSchema
   .keys({
     completedAt: Joi.date().optional().allow(null),
   });
+
+export const approveLoanSchema = Joi.object({
+  status: Joi.string().valid("Approved", "Rejected").required(),
+  notes: Joi.string().optional().allow("", null),
+});

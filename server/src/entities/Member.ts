@@ -60,6 +60,15 @@ export class Member extends BaseEntity {
   @Column({})
   sourceOfIncome: string;
 
+  @Column({ nullable: true, unique: true })
+  email: string;
+
+  @Column({ nullable: true })
+  password: string;
+
+  @Column({ default: true })
+  isActive: boolean;
+
   @ManyToOne(() => Branch, (branch) => branch.members)
   @JoinColumn()
   branch: Branch;

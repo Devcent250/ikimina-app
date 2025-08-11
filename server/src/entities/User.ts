@@ -43,14 +43,14 @@ export class User extends BaseEntity {
   @Column({ nullable: true })
   profileUrl: string;
 
-  @ManyToOne(() => Role, (role) => role.users)
+  @ManyToOne(() => Role, (role) => role.users, { eager: true })
   @JoinColumn()
   role: Role;
 
   @ManyToOne(() => Branch)
   @JoinColumn({ name: "branchId" })
   branch: Branch;
-  
+
   @ManyToOne(() => Group)
   @JoinColumn({ name: "groupId" })
   group: Group;

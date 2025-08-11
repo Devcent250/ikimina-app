@@ -64,7 +64,16 @@ export class QueryBuilder<T> {
 
     const built = this.build(queryBuilder, params, customConditions);
 
+    // Log the generated SQL for debugging
+    console.log("[QueryBuilder] SQL:", built.getSql());
+
     const [items, total] = await built.getManyAndCount();
+    console.log(`[QueryBuilder] Results: ${items.length}, Total: ${total}`);
+    if (items.length === 0) {
+      console.log("[QueryBuilder] No items found.");
+    } else {
+      console.log("[QueryBuilder] First item:", items[0]);
+    }
 
     if (params.page || params.cursor) {
       const lastItem = items[items.length - 1];
@@ -80,7 +89,7 @@ export class QueryBuilder<T> {
         hasMore: params.cursor
           ? items.length === params.limit
           : (params.page || 1) * (params.limit || this.options.defaultLimit) <
-            total,
+          total,
         nextCursor,
       };
     }

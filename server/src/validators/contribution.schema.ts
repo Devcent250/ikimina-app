@@ -7,6 +7,8 @@ export const createContributionSchema = Joi.object({
   paymentMethodId: Joi.number().required(),
   receivedById: Joi.number().required(),
   branchId: Joi.number().required(),
+  documentReceipt: Joi.any().optional(),
+  transactionId: Joi.string().optional().allow("", null),
 }).custom((obj, helpers) => {
   if (obj.depositAmount === 0 && obj.solidarityAmount === 0) {
     return helpers.error("any.invalid", {
@@ -23,6 +25,8 @@ export const updateContributionSchema = Joi.object({
   paymentMethodId: Joi.number(),
   receivedById: Joi.number(),
   branchId: Joi.number(),
+  documentReceipt: Joi.any().optional(),
+  transactionId: Joi.string().optional().allow("", null),
 }).custom((obj, helpers) => {
   if (obj.depositAmount === 0 && obj.solidarityAmount === 0) {
     return helpers.error("any.invalid", {

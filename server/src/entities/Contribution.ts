@@ -70,6 +70,13 @@ export class Contribution extends BaseEntity {
   @OneToMany(() => Fine, (fine) => fine.contribution)
   fines: Fine[];
 
+  // New fields for payment method specific data
+  @Column({ type: "text", nullable: true })
+  documentReceipt: string; // For Bank payments
+
+  @Column({ type: "text", nullable: true })
+  transactionId: string; // For MoMo payments
+
   @Column({ type: "timestamp", default: () => "CURRENT_TIMESTAMP" })
   createdAt: Date;
 

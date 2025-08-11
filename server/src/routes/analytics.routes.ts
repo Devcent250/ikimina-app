@@ -19,4 +19,7 @@ router.get(
   controller.getLoansDistributionsPerGroup
 );
 
+router.get("/loan-reports", controller.getLoanReports);
+router.get("/test-loans", controller.testLoansData);
+
 export default router;

@@ -52,7 +52,7 @@ async function listGroups() {
         branches.forEach((branch, index) => {
             console.log(`${index + 1}. Branch ID: ${branch.id}`);
             console.log(`   Name: ${branch.name}`);
-            console.log(`   Location: ${branch.location || 'No location'}`);
+            console.log(`   Address: ${branch.address || 'No address'}`);
             console.log("   " + "─".repeat(30));
         });
 

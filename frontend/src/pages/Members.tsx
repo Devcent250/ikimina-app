@@ -67,7 +67,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, canPerformAdminActions } from "@/lib/utils";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { Switch } from "@/components/ui/switch";
@@ -104,7 +104,7 @@ const formSchema = z.object({
 
 function MemberForm({ isOpen, setIsOpen, refetch, record }) {
   const { user } = useAuth();
-  const isAdmin = user?.isAdmin;
+  const canPerformActions = canPerformAdminActions(user);
 
   // Extract group IDs helper function
   const extractGroupIds = (record) => {
@@ -131,7 +131,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
       return response.data;
     },
     {
-      enabled: !isAdmin,
+      enabled: !canPerformActions,
       staleTime: 0,
     }
   );
@@ -220,15 +220,15 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
   useEffect(() => {
     if (isOpen) {
       // Refetch user group data when form opens
-      if (!isAdmin) {
+      if (!canPerformActions) {
         refetchUserGroup();
       }
     }
-  }, [isOpen, isAdmin, refetchUserGroup]);
+  }, [isOpen, canPerformActions, refetchUserGroup]);
 
   // Effect to update form values when user group data is available
   useEffect(() => {
-    if (isOpen && !isAdmin) {
+    if (isOpen && !canPerformActions) {
       // Set district and branch IDs from user data for non-admins
       if (user?.branch?.district?.id) {
         form.setValue("districtId", user.branch.district.id.toString());
@@ -245,7 +245,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
         form.setValue("groupIds", [user.group.id.toString()]);
       }
     }
-  }, [isOpen, isAdmin, user, userGroup, form]);
+  }, [isOpen, canPerformActions, user, userGroup, form]);
 
   // Clear branch and group selections when district changes
   useEffect(() => {
@@ -329,7 +329,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                             <Select
                               onValueChange={field.onChange}
                               value={field.value}
-                              disabled={!isAdmin} // Disable district selection for non-admin users
+                              disabled={!canPerformActions} // Disable district selection for non-admin users
                             >
                               <FormControl>
                                 <SelectTrigger error={fieldState?.error?.message}>
@@ -362,7 +362,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                             <Select
                               onValueChange={field.onChange}
                               value={field.value}
-                              disabled={!form.watch("districtId") || !isAdmin} // Disable branch selection if no district or non-admin
+                              disabled={!form.watch("districtId") || !canPerformActions} // Disable branch selection if no district or non-admin
                             >
                               <FormControl>
                                 <SelectTrigger error={fieldState?.error?.message}>
@@ -393,7 +393,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                           <FormLabel>Groups</FormLabel>
                           <FormControl>
                             <MultiSelect
-                              disabled={!form.watch("branchId") || !isAdmin} // Disable group selection if no branch or non-admin
+                              disabled={!form.watch("branchId") || !canPerformActions} // Disable group selection if no branch or non-admin
                               options={
                                 groups?.map((g) => ({
                                   value: g.id.toString(),
@@ -711,7 +711,7 @@ export default function Members() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const { user } = useAuth();
-  const isAdmin = user?.isAdmin;
+  const canPerformActions = canPerformAdminActions(user);
 
   // Add separate queries for filter options
   const { data: branches = [] } = useQuery(["branches"], async () => {
@@ -932,6 +932,35 @@ export default function Members() {
                   </div>
                 )}
             </div>
+          </div>
+        );
+      },
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "leaderRoles",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Leader Roles" />
+      ),
+      cell: ({ row }) => {
+        const leaderRoles = row.original.leaderRoles || [];
+
+        if (leaderRoles.length === 0) {
+          return <span className="text-muted-foreground text-sm">Member</span>;
+        }
+
+        return (
+          <div className="flex flex-wrap gap-1">
+            {leaderRoles.map((leaderRole, index) => (
+              <Badge
+                key={index}
+                variant="outline"
+                className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary hover:bg-primary/20"
+              >
+                {leaderRole.role} ({leaderRole.group.name})
+              </Badge>
+            ))}
           </div>
         );
       },
@@ -1259,7 +1288,7 @@ export default function Members() {
                   </TabsList>
 
                   <TabsContent value="overview" className="mt-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
                       <div className="bg-card rounded-lg border p-3">
                         <h3 className="text-sm font-semibold mb-3 pb-1 border-b">Personal Info</h3>
                         <div className="space-y-2 text-sm">
@@ -1298,6 +1327,31 @@ export default function Members() {
                           </div>
                         </div>
                       </div>
+
+                      <div className="bg-card rounded-lg border p-3">
+                        <h3 className="text-sm font-semibold mb-3 pb-1 border-b">Leader Roles</h3>
+                        <div className="space-y-2 text-sm">
+                          {memberDetailsQuery.data.leaderRoles?.length > 0 ? (
+                            <div className="space-y-2">
+                              {memberDetailsQuery.data.leaderRoles.map((leaderRole, index) => (
+                                <div key={index} className="flex items-center gap-2">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs px-2 py-1 bg-primary/10 text-primary"
+                                  >
+                                    {leaderRole.role}
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground">
+                                    in {leaderRole.group.name}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">No leader roles</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </TabsContent>
 
@@ -1317,16 +1371,19 @@ export default function Members() {
                                   <Badge variant={membership.loanEligibility ? "default" : "secondary"} className="text-xs">
                                     {membership.loanEligibility ? "Eligible" : "Not Eligible"}
                                   </Badge>
-                                  {isAdmin && (
+                                  {canPerformActions && (
                                     <Switch
                                       checked={membership.loanEligibility}
                                       onCheckedChange={async (checked) => {
                                         const branchId = membership.branch?.id || membership.group?.branch?.id || memberDetailsQuery.data?.branch?.id;
+                                        // Only send the fields we want to update
                                         const payload = {
                                           loanEligibility: checked,
                                           branchId,
                                         };
+
                                         console.log("PATCH payload:", payload);
+                                        console.log("Membership data:", membership);
                                         if (!branchId) {
                                           console.error("Missing branchId for membership:", membership);
                                           console.error("Member data:", memberDetailsQuery.data);

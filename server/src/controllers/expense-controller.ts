@@ -100,13 +100,18 @@ export class ExpenseController {
         return next(new NotFoundError("Branch not found"));
       }
 
+      // Fetch the user entity for createdBy
+      let createdByUser = undefined;
+      if (req?.user?.id) {
+        createdByUser = await AppDataSource.getRepository(User).findOne({ where: { id: req.user.id } });
+      }
       // Create new expense
       const newExpense = this.repository.create({
         group,
         season: currentSeason,
         expenseCategory,
         paymentMethod,
-        createdBy: { id: req?.user?.id },
+        createdBy: createdByUser,
         amount,
         name,
         attachment,
@@ -251,6 +256,7 @@ export class ExpenseController {
 
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
+      // Only join direct relations for performance
       const result = await this?.queryBuilder.buildAndExecute(
         req.query as QueryParams,
         [],
@@ -260,7 +266,6 @@ export class ExpenseController {
           "expenses.expenseCategory",
           "expenses.paymentMethod",
           "expenses.createdBy",
-          "expenses.createdBy.group",
           "expenses.branch",
         ]
       );

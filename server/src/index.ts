@@ -30,6 +30,7 @@ import expenseRoutes from "./routes/expenses.routes";
 import districtRoutes from "./routes/district.routes";
 import { authorization } from "./middleware/auth.middleware";
 import analyticsRoutes from "./routes/analytics.routes";
+import loanCategoryRoutes from "./routes/loan-category.routes";
 
 dotenv.config();
 
@@ -55,12 +56,20 @@ if (process.env.NODE_ENV === "development") {
 // Serve static files from the 'public' directory
 app.use(express.static("public"));
 
+// Serve uploaded files
+app.use("/uploads", express.static(path.join(__dirname, "..", "public", "uploads")));
+
 if (process.env.NODE_ENV === "production") {
   // Serve static files from the React app
   app.use(express.static(path.join(__dirname, "../client")));
 }
 
 app.use("/api/auth", authRoutes);
+
+// Test endpoint to verify server is working
+app.get("/api/test", (req, res) => {
+  res.json({ message: "Server is running", timestamp: new Date().toISOString() });
+});
 
 // Nested routes for better resource hierarchy
 app.use("/api/groups/:groupId/members", authorization, groupMemberRoutes);
@@ -75,7 +84,15 @@ app.use("/api/groups/:groupId/attendance", authorization, attendanceRoutes);
 app.use("/api/groups/:groupId/expenses", authorization, expenseRoutes);
 
 app.use("/api/loans/:loanId/payments", authorization, loanPaymentRoutes);
+console.log("✅ Loan payment routes mounted at /api/loans/:loanId/payments");
+
 app.use("/api", authorization, loanVerificationRoutes);
+
+// Debug: Log all registered routes
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
 
 app.use("/api/branches/:branchId/groups", authorization, groupRoutes);
 app.use("/api/branches/:branchId/members", authorization, memberRoutes);
@@ -94,6 +111,7 @@ app.use("/api/users", authorization, userRoutes);
 app.use("/api/expenses", authorization, expenseRoutes);
 app.use("/api/districts", authorization, districtRoutes);
 app.use("/api/analytics", authorization, analyticsRoutes);
+app.use("/api/loan-categories", authorization, loanCategoryRoutes);
 
 // Ensure upload directory exists
 const uploadDir = path.join(__dirname, "..", "public", "uploads");

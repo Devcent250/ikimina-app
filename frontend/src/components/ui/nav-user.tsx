@@ -47,6 +47,10 @@ export function NavUser({
 
   // Get the role display name - if user is admin, show "Admin", otherwise show their role
   const getRoleDisplayName = () => {
+    console.log("NavUser - User data:", user);
+    console.log("NavUser - isAdmin:", isAdmin);
+    console.log("NavUser - role:", user.role);
+
     if (isAdmin) {
       return "Admin";
     }

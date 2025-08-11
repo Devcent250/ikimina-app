@@ -30,12 +30,8 @@ export class Loan extends BaseEntity {
   @JoinColumn()
   member: Member;
 
-  @Column({
-    type: "enum",
-    enum: ["Emergency", "Business", "Education", "Other"],
-    default: "Other",
-  })
-  loanType: "Emergency" | "Business" | "Education" | "Other";
+  @Column({ type: "varchar", length: 100, default: "Other" })
+  loanType: string;
 
   // status
   // pending, approved, rejected, completed

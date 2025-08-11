@@ -19,6 +19,7 @@ import { Role } from "./entities/Role";
 import { Season } from "./entities/Season";
 import { Group } from "./entities/Group";
 import { District } from "./entities/District";
+import { LoanCategory } from "./entities/LoanCategory";
 dotenv.config();
 
 export const MIGRATION_FILES =
@@ -43,6 +44,7 @@ export const AppDataSource = new DataSource({
     District,
     GroupMember,
     Loan,
+    LoanCategory,
     LoanPayment,
     LoanVerification,
     Member,

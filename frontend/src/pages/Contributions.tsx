@@ -49,7 +49,7 @@ import {
 } from "@/components/ui/dialog";
 import SearchSelect from "@/components/ui/search-select";
 import { useAuth } from "@/context/auth.context";
-import { Loader } from "lucide-react";
+import { Loader, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -63,6 +63,7 @@ import { DateRange } from "react-day-picker";
 import React from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Table, TableBody, TableCell, TableRow, TableHeader, TableHead } from "@/components/ui/table";
 
 interface Member {
   id: number;
@@ -70,6 +71,131 @@ interface Member {
   lastName: string;
   avatar?: string;
   fullNames: string;
+}
+
+interface MemberContributionsTableProps {
+  memberId: number;
+  onOpenContribution: (contribution: any) => void;
+}
+
+function MemberContributionsTable({
+  memberId,
+  onOpenContribution,
+}: MemberContributionsTableProps) {
+  const downloadReport = () => {
+    if (memberContributions.length === 0) return;
+    
+    // Create CSV content
+    const headers = ['ID', 'Date', 'Group', 'Payment Method', 'Amount (FRW)'];
+    const csvContent = [
+      headers.join(','),
+      ...memberContributions.map(c => [
+        c.id,
+        new Date(c.createdAt).toLocaleDateString(),
+        c.group?.name || '-',
+        c.paymentMethod?.name || '-',
+        (Number(c.depositAmount || 0) + Number(c.solidarityAmount || 0)).toLocaleString()
+      ].join(','))
+    ].join('\n');
+    
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `contributions_${memberContributions[0]?.member?.fullNames?.replace(/\s+/g, '_') || 'member'}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  const { data: memberContributions = [], isLoading } = useQuery(
+    ["member-contributions", memberId],
+    async () => {
+      const { data } = await api.get(`/contributions`, {
+        params: {
+          page_size: 1000,
+          page: 1,
+          filters: [
+            {
+              field: "member",
+              operator: "in",
+              value: [memberId],
+            },
+          ],
+          sortBy: "createdAt",
+          order: "DESC",
+        },
+      });
+      // Fallback: server may ignore filters, so ensure we filter client-side
+      const results = data?.results || [];
+      return Array.isArray(results)
+        ? results.filter((c) => c?.member?.id === memberId)
+        : [];
+    },
+    { enabled: !!memberId }
+  );
+
+  if (isLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <Loader className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div className="text-sm text-muted-foreground">
+          {memberContributions.length} contribution{memberContributions.length !== 1 ? 's' : ''} found
+        </div>
+        <Button
+          onClick={downloadReport}
+          disabled={memberContributions.length === 0}
+          size="sm"
+          variant="outline"
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Download Report
+        </Button>
+      </div>
+      <div className="border rounded-md">
+        <Table className="w-full">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[80px]">ID</TableHead>
+            <TableHead className="w-[120px]">Date</TableHead>
+            <TableHead>Group</TableHead>
+            <TableHead>Payment Method</TableHead>
+            <TableHead className="text-right w-[160px]">Amount</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {memberContributions.map((c) => (
+            <TableRow
+              key={c.id}
+              className="cursor-pointer"
+              onClick={() => onOpenContribution(c)}
+            >
+              <TableCell className="w-[80px]">#{c.id}</TableCell>
+              <TableCell className="w-[140px]">
+                {new Date(c.createdAt).toLocaleDateString()}
+              </TableCell>
+              <TableCell>{c.group?.name || "-"}</TableCell>
+              <TableCell>{c.paymentMethod?.name || "-"}</TableCell>
+              <TableCell className="text-right w-[160px]">
+                {(
+                  Number(c.depositAmount || 0) + Number(c.solidarityAmount || 0)
+                ).toLocaleString()} FRW
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      </div>
+    </div>
+  );
 }
 
 interface ContributionData {
@@ -87,6 +213,9 @@ interface ContributionData {
   branchId: number;
   solidarityAmount: string;
   depositAmount: string;
+  totalAmount?: number;
+  documentReceipt?: string;
+  transactionId?: string;
   meta?: {
     isFooter: boolean;
   };
@@ -103,6 +232,8 @@ const formSchema = z.object({
   paymentMethodId: z.string().min(1, "Payment method is required"),
   branchId: z.string().min(1, "Branch is required"),
   contributionType: z.enum(["saving", "solidarity"]).optional(),
+  documentReceipt: z.any().optional(), // Changed to any to handle File objects
+  transactionId: z.string().optional(),
 });
 
 function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
@@ -121,6 +252,8 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
         paymentMethodId: record.paymentMethodId?.toString(),
         branchId: record.branchId?.toString(),
         contributionType: record.depositAmount > 0 ? "saving" : "solidarity",
+        documentReceipt: record.documentReceipt || null,
+        transactionId: record.transactionId || "",
       }
       : {
         totalAmount: "0",
@@ -131,6 +264,8 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
         paymentMethodId: "",
         branchId: "",
         contributionType: undefined,
+        documentReceipt: null,
+        transactionId: "",
       },
   });
 
@@ -139,6 +274,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [numberOfShares, setNumberOfShares] = useState(0);
   const [availableGroupMembers, setAvailableGroupMembers] = useState([]);
+  const [showSummary, setShowSummary] = useState(true);
 
   // Calculate shares and distribute amounts when total amount changes
   useEffect(() => {
@@ -489,9 +625,34 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
       }
     }
 
+    // Handle file upload
+    const formData = new FormData();
+
+    // Add all form values to FormData
+    Object.keys(values).forEach(key => {
+      if (key === 'documentReceipt' && values[key] instanceof File) {
+        formData.append('documentReceipt', values[key]);
+      } else if (values[key] !== null && values[key] !== undefined) {
+        formData.append(key, values[key].toString());
+      }
+    });
+
+    // Add receivedById for new contributions
+    if (!record) {
+      formData.append('receivedById', user?.id?.toString() || '');
+    }
+
     const q = record
-      ? api.patch(`/contributions/${record.id}`, values)
-      : api.post("/contributions", { ...values, receivedById: user?.id });
+      ? api.patch(`/contributions/${record.id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      : api.post("/contributions", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
     return q
       .then(() => {
@@ -526,6 +687,24 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {/* Member search first */}
+            <div className="mb-2">
+              <FormItem>
+                <FormLabel>Search Member</FormLabel>
+                <SearchSelect
+                  options={allMembers.map((member) => ({
+                    label: `${member.fullNames} (${member.idNumber})`,
+                    value: member.id,
+                  }))}
+                  value={selectedMember?.id}
+                  setValue={(value) => {
+                    handleMemberSelect(value);
+                  }}
+                  placeholder="Search for a member by name or ID"
+                />
+              </FormItem>
+            </div>
+
             <FormField
               control={form.control}
               name="totalAmount"
@@ -550,48 +729,26 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
 
             {selectedGroup && (
               <div className="space-y-2 rounded-lg border p-3">
-                <div className="flex justify-between text-sm">
-                  <span>Solidarity Amount:</span>
-                  <span className="font-medium">
-                    {form.watch("solidarityAmount")} FRW
-                  </span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Summary</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSummary(!showSummary)}
+                    className="h-6 px-2 text-xs"
+                  >
+                    {showSummary ? "Hide" : "Show"}
+                  </Button>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Deposit Amount:</span>
-                  <span className="font-medium">
-                    {form.watch("depositAmount")} FRW
-                  </span>
-                </div>
-                {form.watch("depositAmount") !== "0" && (
-                  <div className="flex justify-between text-sm">
-                    <span>Number of Shares:</span>
-                    <span className="font-medium">{numberOfShares} shares</span>
+                {showSummary && (
+                  <div className="flex justify-between text-sm font-medium">
+                    <span>Total:</span>
+                    <span>{form.watch("totalAmount")} FRW</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm font-medium mt-2 pt-2 border-t">
-                  <span>Total:</span>
-                  <span>{form.watch("totalAmount")} FRW</span>
-                </div>
               </div>
             )}
-
-            {/* Member search first */}
-            <div className="mb-2">
-              <FormItem>
-                <FormLabel>Search Member</FormLabel>
-                <SearchSelect
-                  options={allMembers.map((member) => ({
-                    label: `${member.fullNames} (${member.idNumber})`,
-                    value: member.id,
-                  }))}
-                  value={selectedMember?.id}
-                  setValue={(value) => {
-                    handleMemberSelect(value);
-                  }}
-                  placeholder="Search for a member by name or ID"
-                />
-              </FormItem>
-            </div>
 
             {/* Branch field - readonly when member is selected */}
             <div className="grid grid-cols-2 gap-3">
@@ -621,8 +778,8 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                         </FormControl>
                         <SelectContent>
                           {branches?.map((e) => (
-                            <SelectItem key={e.id} value={e.id?.toString()}>
-                              {e.name}
+                            <SelectItem key={e.id} value={e.id?.toString() || "0"}>
+                              {e.name || "Unnamed Branch"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -670,12 +827,12 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                             return (
                               <SelectItem
                                 key={group.id}
-                                value={group.id.toString()}
+                                value={group.id?.toString() || "0"}
                                 className={
                                   isMemberGroup ? "text-green-500" : ""
                                 }
                               >
-                                {group.name} {isMemberGroup ? "(Member)" : ""}
+                                {group.name || "Unnamed Group"} {isMemberGroup ? "(Member)" : ""}
                               </SelectItem>
                             );
                           })}
@@ -727,9 +884,9 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                             {availableGroupMembers.map((groupMember) => (
                               <SelectItem
                                 key={groupMember?.id}
-                                value={groupMember?.id.toString() || ""}
+                                value={groupMember?.id?.toString() || "0"}
                               >
-                                {groupMember?.member?.fullNames || undefined}
+                                {groupMember?.member?.fullNames || "Unknown Member"}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -787,8 +944,8 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                         </FormControl>
                         <SelectContent>
                           {paymentMethods?.map((e) => (
-                            <SelectItem key={e.id} value={e.id?.toString()}>
-                              {e.name}
+                            <SelectItem key={e.id} value={e.id?.toString() || "0"}>
+                              {e.name || "Unnamed Payment Method"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -798,6 +955,75 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                   </FormItem>
                 )}
               />
+
+              {/* Conditional fields based on payment method */}
+              {(() => {
+                const selectedPaymentMethod = paymentMethods?.find(
+                  (method) => method.id?.toString() === form.watch("paymentMethodId")
+                );
+                const isBank = selectedPaymentMethod?.name?.toLowerCase().includes("bank");
+                const isMoMo = selectedPaymentMethod?.name?.toLowerCase().includes("momo");
+
+                return (
+                  <>
+                    {isBank && (
+                      <FormField
+                        control={form.control}
+                        name="documentReceipt"
+                        render={({ field }) => (
+                          <FormItem className="col-span-2">
+                            <FormLabel>Document/Receipt</FormLabel>
+                            <FormControl>
+                              <div className="space-y-2">
+                                <Input
+                                  type="file"
+                                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    field.onChange(file);
+                                  }}
+                                  className="cursor-pointer"
+                                />
+                                {field.value && (
+                                  <div className="text-sm text-muted-foreground">
+                                    Selected file: {field.value.name}
+                                  </div>
+                                )}
+                                {record?.documentReceipt && !field.value && (
+                                  <div className="text-sm text-muted-foreground">
+                                    Current file: {record.documentReceipt}
+                                  </div>
+                                )}
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {isMoMo && (
+                      <FormField
+                        control={form.control}
+                        name="transactionId"
+                        render={({ field, fieldState }) => (
+                          <FormItem className="col-span-2">
+                            <FormLabel>Transaction ID</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Enter MoMo transaction ID"
+                                error={fieldState?.error?.message}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Add the submit button */}
@@ -863,13 +1089,12 @@ export default function Contributions() {
   const newRecordModal = useModalState();
   const confirmModal = useConfirmModal();
 
-  // Add separate queries for filter options
+
   const { data: members = [] } = useQuery(["members"], async () => {
     const { data } = await api.get("/members");
-    console.log("Members data:", data); // Debug to see structure
+    console.log("Members data:", data);
     return data.results.map((member) => ({
-      // Make sure these properties match what's available in your API response
-      label: member.fullNames,
+      label: member.fullNames || "Unnamed Member",
       value: member.id,
     }));
   });
@@ -877,8 +1102,8 @@ export default function Contributions() {
   const { data: groups = [] } = useQuery(["groups"], async () => {
     const { data } = await api.get("/groups");
     return data.results.map((group) => ({
-      label: group.name,
-      value: group.name,
+      label: group.name || "Unnamed Group",
+      value: group.name || "Unnamed Group",
     }));
   });
 
@@ -893,8 +1118,8 @@ export default function Contributions() {
   const { data: users = [] } = useQuery(["users"], async () => {
     const { data } = await api.get("/users");
     return data.results.map((user) => ({
-      label: user.name,
-      value: user.name,
+      label: user.name || "Unnamed User",
+      value: user.name || "Unnamed User",
     }));
   });
 
@@ -919,9 +1144,8 @@ export default function Contributions() {
         ...(searchText && { search: searchText }),
         ...(columnFilters.length > 0 && {
           filters: columnFilters.map((filter) => {
-            // Map the filter field to the correct relation name
             const fieldMap = {
-              member: "member", // Just use "member" instead of "member.id"
+              member: "member",
               group: "group.name",
               paymentMethod: "paymentMethod.name",
               receivedBy: "receivedBy.name",
@@ -987,41 +1211,44 @@ export default function Contributions() {
         };
       }
 
-      const totalDepositAmount = data?.results?.reduce(
-        (a, b) => a + Number(b?.depositAmount || 0),
-        0
-      );
-      const totalSolidarityAmount = data?.results?.reduce(
-        (a, b) => a + Number(b?.solidarityAmount || 0),
-        0
-      );
 
-      // Transform the API results into the format expected by the DataTable
+      // Aggregate by member so each member appears once with total amount
+      const memberIdToAggregate = new Map<number, any>();
+      data?.results?.forEach((e) => {
+        const memberId = e?.member?.id;
+        if (!memberId) return;
+        const contributionTotal = Number(e?.depositAmount || 0) + Number(e?.solidarityAmount || 0);
+        const existing = memberIdToAggregate.get(memberId);
+        if (!existing) {
+          memberIdToAggregate.set(memberId, {
+            id: memberId,
+            member: e?.member,
+            group: e?.group?.name,
+            createdAt: e?.createdAt,
+            totalAmount: contributionTotal,
+            _groups: new Set<string>(e?.group?.name ? [e.group.name] : []),
+          });
+        } else {
+          existing.totalAmount += contributionTotal;
+          if (new Date(e?.createdAt) > new Date(existing.createdAt)) {
+            existing.createdAt = e?.createdAt;
+          }
+          if (e?.group?.name) existing._groups.add(e.group.name);
+        }
+      });
+
+      const aggregatedItems = Array.from(memberIdToAggregate.values()).map((item) => ({
+        ...item,
+        group: item._groups && item._groups.size > 1 ? "Multiple" : item.group || "-",
+      }));
+
       return {
-        items: data?.results?.map((e) => ({
-          ...e,
-          member: e?.member, // Make sure member object is passed correctly
-          group: e?.group?.name,
-          paymentMethod: e?.paymentMethod?.name,
-          receivedBy: e?.receivedBy?.name,
-          createdAt: e?.createdAt,
-          groupId: e?.group?.id,
-          groupMemberId: e?.groupMember?.id,
-          paymentMethodId: e?.paymentMethod?.id,
-          receivedById: e?.receivedBy?.id,
-          memberId: e?.member?.id,
-          branchId: e?.branch?.id,
-          solidarityAmount: e?.solidarityAmount || "0",
-          depositAmount: e?.depositAmount || "0",
-        })),
-        totalPages: data?.totalPages,
-        meta: data?.results?.length && {
+        items: aggregatedItems,
+        totalPages: 1,
+        meta: aggregatedItems.length && {
           id: "TOTAL",
-          depositAmount: totalDepositAmount,
-          solidarityAmount: totalSolidarityAmount,
-          meta: {
-            isFooter: true,
-          },
+          totalAmount: aggregatedItems.reduce((a, b) => a + Number(b.totalAmount || 0), 0),
+          meta: { isFooter: true },
         },
       };
     },
@@ -1044,6 +1271,8 @@ export default function Contributions() {
 
   const [selectedContribution, setSelectedContribution] = useState(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [selectedMemberForDetails, setSelectedMemberForDetails] = useState<Member | null>(null);
+  const [isMemberDialogOpen, setIsMemberDialogOpen] = useState(false);
 
   // Add query for contribution details
   const contributionDetailsQuery = useQuery(
@@ -1142,8 +1371,8 @@ export default function Contributions() {
             </Avatar>
             <button
               onClick={() => {
-                setSelectedContribution(row.original);
-                setIsViewDialogOpen(true);
+                setSelectedMemberForDetails(member);
+                setIsMemberDialogOpen(true);
               }}
               className="font-medium hover:underline"
             >
@@ -1173,32 +1402,24 @@ export default function Contributions() {
       enableSorting: true,
       enableHiding: false,
     },
+    // Replace duplicated amounts with a single Total Amount column
     {
-      accessorKey: "depositAmount",
+      accessorKey: "totalAmount",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Shares Amount" />
+        <DataTableColumnHeader column={column} title="Total Amount" />
       ),
       cell: ({ row }) => {
-        const amount = row.getValue("depositAmount");
+        const amount = row.getValue("totalAmount");
+        if (row.original.meta?.isFooter) {
+          return (
+            <div className="flex items-center truncate gap-3 font-semibold">
+              {Number(amount || 0).toLocaleString()} FRW
+            </div>
+          );
+        }
         return (
           <div className="flex items-center truncate gap-3">
-            {Number(amount).toLocaleString()} FRW
-          </div>
-        );
-      },
-      enableSorting: true,
-      enableHiding: false,
-    },
-    {
-      accessorKey: "solidarityAmount",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Solidarity Amount" />
-      ),
-      cell: ({ row }) => {
-        const amount = row.getValue("solidarityAmount");
-        return (
-          <div className="flex items-center truncate gap-3">
-            {Number(amount).toLocaleString()} FRW
+            {Number(amount || 0).toLocaleString()} FRW
           </div>
         );
       },
@@ -1217,6 +1438,53 @@ export default function Contributions() {
         return (
           <div className="flex items-center gap-3 truncate">
             {row.getValue("paymentMethod")}
+          </div>
+        );
+      },
+      enableSorting: true,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "documentReceipt",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Document/Receipt" />
+      ),
+      cell: ({ row }) => {
+        if (row.original.meta?.isFooter) {
+          return null;
+        }
+        const value = row.getValue("documentReceipt") as string;
+        if (!value) return <span className="text-muted-foreground">-</span>;
+        return (
+          <div className="flex items-center gap-3 truncate">
+            <a
+              href={`/uploads/${value}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 underline"
+            >
+              View Document
+            </a>
+          </div>
+        );
+      },
+      enableSorting: true,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "transactionId",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Transaction ID" />
+      ),
+      cell: ({ row }) => {
+        if (row.original.meta?.isFooter) {
+          return null;
+        }
+        const value = row.getValue("transactionId") as string;
+        if (!value) return <span className="text-muted-foreground">-</span>;
+        return (
+          <div className="flex items-center gap-3 truncate">
+            {String(value)}
           </div>
         );
       },
@@ -1259,25 +1527,12 @@ export default function Contributions() {
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => {
-                  setSelectedContribution(row.original);
-                  setIsViewDialogOpen(true);
+                  const member = row.original.member as Member;
+                  setSelectedMemberForDetails(member);
+                  setIsMemberDialogOpen(true);
                 }}
               >
                 View Details
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setRecordToEdit(row?.original);
-                }}
-              >
-                Update Contribution
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  confirmModal.open({ meta: row?.original });
-                }}
-              >
-                Delete Contribution
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1356,6 +1611,31 @@ export default function Contributions() {
         </div>
       </div>
 
+      {/* Search Bar */}
+      <div className="mb-6">
+        <div className="relative max-w-md">
+          <Input
+            placeholder="Search contributions by member, group, or payment method..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="pl-10"
+          />
+          <svg
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
+      </div>
+
       <DataTable
         title="Contributions List"
         columns={columns}
@@ -1379,8 +1659,8 @@ export default function Contributions() {
             type: "select",
             options:
               paymentMethods?.map((method) => ({
-                label: method.name,
-                value: method.name,
+                label: method.name || "Unnamed Payment Method",
+                value: method.name || "Unnamed Payment Method",
               })) || [],
           },
           {
@@ -1391,7 +1671,12 @@ export default function Contributions() {
           },
         ]}
         isLoading={recordsQuery.status === "loading"}
-        defaultColumnVisibility={{}}
+          defaultColumnVisibility={{
+            paymentMethod: false,
+            documentReceipt: false,
+            transactionId: false,
+            receivedBy: false,
+          }}
         onSearch={(value) => setSearchText(value)}
         columnFilters={columnFilters}
         setColumnFilters={setColumnFilters}
@@ -1427,6 +1712,28 @@ export default function Contributions() {
         refetch={recordsQuery.refetch}
         record={recordToEdit}
       />
+
+      {/* Member contributions list dialog */}
+      <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
+        <DialogContent className="max-w-[95vw] md:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedMemberForDetails
+                ? `${selectedMemberForDetails.fullNames}'s Contributions`
+                : "Contributions"}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedMemberForDetails ? (
+            <MemberContributionsTable
+              memberId={selectedMemberForDetails.id}
+              onOpenContribution={(c) => {
+                setSelectedContribution(c);
+                setIsViewDialogOpen(true);
+              }}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
         <DialogContent className="max-w-[95vw] md:max-w-4xl h-[90vh] md:h-[85vh] overflow-hidden flex flex-col">
@@ -1524,46 +1831,78 @@ export default function Contributions() {
                     <h3 className="text-base font-semibold mb-4">
                       Payment Information
                     </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          Payment Method
-                        </p>
-                        <p className="font-medium">
-                          {contributionDetailsQuery.data.paymentMethod?.name}
-                        </p>
-                      </div>
-                      {contributionDetailsQuery.data.paymentMethod
-                        ?.accountNumber && (
-                          <div>
-                            <p className="text-sm text-muted-foreground">
+                    <Table className="w-full">
+                      <TableBody>
+                        <TableRow>
+                          <TableCell className="text-sm text-muted-foreground w-[170px]">
+                            Payment Method
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {contributionDetailsQuery.data.paymentMethod?.name || "-"}
+                          </TableCell>
+                        </TableRow>
+
+                        {contributionDetailsQuery.data.paymentMethod?.accountNumber && (
+                          <TableRow>
+                            <TableCell className="text-sm text-muted-foreground">
                               Account Number
-                            </p>
-                            <p className="font-medium">
-                              {
-                                contributionDetailsQuery.data.paymentMethod
-                                  .accountNumber
-                              }
-                            </p>
-                          </div>
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {contributionDetailsQuery.data.paymentMethod.accountNumber}
+                            </TableCell>
+                          </TableRow>
                         )}
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          Received By
-                        </p>
-                        <p className="font-medium">
-                          {contributionDetailsQuery.data.receivedBy?.name}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Date</p>
-                        <p className="font-medium">
-                          {new Date(
-                            contributionDetailsQuery.data.createdAt
-                          ).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
+
+                        {contributionDetailsQuery.data.documentReceipt && (
+                          <TableRow>
+                            <TableCell className="text-sm text-muted-foreground">
+                              Document/Receipt
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <a
+                                href={`/uploads/${contributionDetailsQuery.data.documentReceipt}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 underline"
+                              >
+                                View Document
+                              </a>
+                            </TableCell>
+                          </TableRow>
+                        )}
+
+                        {contributionDetailsQuery.data.transactionId && (
+                          <TableRow>
+                            <TableCell className="text-sm text-muted-foreground">
+                              Transaction ID
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {contributionDetailsQuery.data.transactionId}
+                            </TableCell>
+                          </TableRow>
+                        )}
+
+                        <TableRow>
+                          <TableCell className="text-sm text-muted-foreground">
+                            Received By
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {contributionDetailsQuery.data.receivedBy?.name || "-"}
+                          </TableCell>
+                        </TableRow>
+
+                        <TableRow>
+                          <TableCell className="text-sm text-muted-foreground">
+                            Date
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {new Date(
+                              contributionDetailsQuery.data.createdAt
+                            ).toLocaleDateString()}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
 

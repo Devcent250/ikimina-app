@@ -41,15 +41,43 @@ export class MemberController {
     });
   }
 
-  private format = (member: Member) => {
+  private format = async (member: Member) => {
     // Calculate current savings from contributions
     const currentSavings = member.contributions
       ? member.contributions.reduce((sum, c) => sum + (c.depositAmount || 0), 0)
       : 0;
+
+    // Get leader roles for this member
+    const { Group } = await import("../entities/Group");
+    const groupRepository = AppDataSource.getRepository(Group);
+
+    const presidentGroups = await groupRepository.find({
+      where: { president: { id: member.id } },
+      select: ["id", "name"]
+    });
+
+    const accountantGroups = await groupRepository.find({
+      where: { accountant: { id: member.id } },
+      select: ["id", "name"]
+    });
+
+    const secretaryGroups = await groupRepository.find({
+      where: { secretary: { id: member.id } },
+      select: ["id", "name"]
+    });
+
+    // Create leader roles array
+    const leaderRoles = [
+      ...presidentGroups.map(g => ({ role: "President", group: g })),
+      ...accountantGroups.map(g => ({ role: "Accountant", group: g })),
+      ...secretaryGroups.map(g => ({ role: "Secretary", group: g }))
+    ];
+
     return {
       ...member,
       groups: member.groupMemberships?.map(gm => gm.group).filter(Boolean) || [],
       currentSavings,
+      leaderRoles,
     };
   };
 
@@ -149,7 +177,7 @@ export class MemberController {
 
       res.status(201).json({
         status: "success",
-        data: this.format(memberWithRelations),
+        data: await this.format(memberWithRelations),
       });
     }
   );
@@ -200,9 +228,18 @@ export class MemberController {
         })
       };
 
+      // Format with leader roles
+      const formattedWithLeaderRoles = await this.format(member);
+
+      // Merge the additional data from formattedMember
+      const finalData = {
+        ...formattedWithLeaderRoles,
+        groupMemberships: formattedMember.groupMemberships
+      };
+
       res.status(200).json({
         status: "success",
-        data: formattedMember,
+        data: finalData,
       });
     }
   );
@@ -273,7 +310,7 @@ export class MemberController {
 
       res.status(200).json({
         status: "success",
-        data: this.format(refreshedMember),
+        data: await this.format(refreshedMember),
       });
     }
   );
@@ -314,14 +351,24 @@ export class MemberController {
           memberMap.get(member.id) || member
         );
 
+        // Format all members with leader roles
+        const formattedResults = await Promise.all(
+          enhancedResults.map(member => this.format(member))
+        );
+
         res.json({
           ...baseResult,
-          results: enhancedResults.map(this.format),
+          results: formattedResults,
         });
       } else {
+        // Format all members with leader roles
+        const formattedResults = await Promise.all(
+          baseResult.results.map(member => this.format(member))
+        );
+
         res.json({
           ...baseResult,
-          results: baseResult.results.map(this.format),
+          results: formattedResults,
         });
       }
     }

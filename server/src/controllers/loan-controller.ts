@@ -12,6 +12,7 @@ import { User } from "../entities/User";
 import { Group } from "../entities/Group";
 import { QueryParams } from "../types/QueryParams";
 import { Branch } from "../entities/Branch";
+import { LoanVerification } from "../entities/LoanVerification";
 
 export class LoanController {
   private repository: Repository<Loan> = AppDataSource.getRepository(Loan);
@@ -117,12 +118,22 @@ export class LoanController {
         return next(new NotFoundError("Group not found"));
       }
 
-      const createdBy = await AppDataSource.getRepository(User).findOne({
-        where: { id: createdById },
-      });
-      if (!createdBy) {
-        return next(new NotFoundError("User not found"));
+      // Check if the group member is a leader (president, accountant, or secretary)
+      const isLeader =
+        groupMember.member.id === group.president?.id ||
+        groupMember.member.id === group.accountant?.id ||
+        groupMember.member.id === group.secretary?.id;
+
+      let createdBy = null;
+      if (isLeader && createdById) {
+        createdBy = await AppDataSource.getRepository(User).findOne({
+          where: { id: createdById },
+        });
+        if (!createdBy) {
+          return next(new NotFoundError("User not found"));
+        }
       }
+      // For regular members, createdBy can be null (no user account needed)
 
       // Create new loan
       const newLoan = this.repository.create({
@@ -130,7 +141,7 @@ export class LoanController {
         member: groupMember.member,
         season,
         group,
-        createdBy,
+        ...(createdBy && { createdBy }), // Only include createdBy if it exists
         amount,
         loanType,
         loanTerms,
@@ -264,6 +275,7 @@ export class LoanController {
         const createdBy = await AppDataSource.getRepository(User).findOne({
           where: { id: createdById },
         });
+
         if (!createdBy) {
           return next(new NotFoundError("User not found"));
         }
@@ -304,6 +316,7 @@ export class LoanController {
             "loans.createdBy",
             "loans.payments",
             "loans.branch",
+            "loans.verifications",
           ]
         );
 
@@ -347,6 +360,146 @@ export class LoanController {
       res.status(204).json({
         status: "success",
         data: null,
+      });
+    }
+  );
+
+  // Approve or reject a loan by a leader
+  approveLoan = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      const { recordId } = req.params;
+      const { status, notes } = req.body; // status: "Approved" or "Rejected"
+      const currentUser = req.user;
+
+      // Find the loan
+      const loan = await this.repository.findOne({
+        where: { id: Number(recordId) },
+        relations: ["group", "group.president", "group.accountant", "group.secretary", "verifications"],
+      });
+
+      if (!loan) {
+        return next(new NotFoundError("Loan not found"));
+      }
+
+      // Check if loan is already approved or rejected
+      if (loan.status !== "pending") {
+        return next(new BadRequestError("Loan is already processed"));
+      }
+
+      // Verify that the current user is a leader of this loan's group
+      const isApprover =
+        (loan.group.president?.id === currentUser.id) ||
+        (loan.group.secretary?.id === currentUser.id);
+
+      if (!isApprover) {
+        return next(new BadRequestError("Only the President or Secretary can approve loans"));
+      }
+
+      // Check if this leader has already approved/rejected this loan
+      const existingVerification = await AppDataSource.getRepository(LoanVerification).findOne({
+        where: {
+          loan: { id: loan.id },
+          member: { id: currentUser.id }
+        }
+      });
+
+      if (existingVerification) {
+        return next(new BadRequestError("You have already processed this loan"));
+      }
+
+      // Create verification record
+      const verification = new LoanVerification();
+      verification.loan = loan;
+      verification.member = await AppDataSource.getRepository(Member).findOne({
+        where: { id: currentUser.id }
+      });
+      verification.status = status;
+      verification.notes = notes;
+
+      await AppDataSource.getRepository(LoanVerification).save(verification);
+
+      // Check if we have 3 approvals
+      const approvals = await AppDataSource.getRepository(LoanVerification).find({
+        where: {
+          loan: { id: loan.id },
+          status: "Approved"
+        }
+      });
+
+      const rejections = await AppDataSource.getRepository(LoanVerification).find({
+        where: {
+          loan: { id: loan.id },
+          status: "Rejected"
+        }
+      });
+
+      // If we have 3 approvals, automatically approve the loan
+      if (approvals.length >= 2) {
+        loan.status = "approved";
+        await this.repository.save(loan);
+      }
+      // If we have any rejections, automatically reject the loan
+      else if (rejections.length > 0) {
+        loan.status = "rejected";
+        await this.repository.save(loan);
+      }
+
+      // Return updated loan with verification info
+      const updatedLoan = await this.repository.findOne({
+        where: { id: Number(recordId) },
+        relations: ["verifications", "verifications.member", "group", "group.president", "group.accountant", "group.secretary"],
+      });
+
+      res.status(200).json({
+        status: "success",
+        data: this.format(updatedLoan),
+        message: `Loan ${status.toLowerCase()} successfully`
+      });
+    }
+  );
+
+  // Get loan approval status
+  getLoanApprovalStatus = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      const { recordId } = req.params;
+
+      const loan = await this.repository.findOne({
+        where: { id: Number(recordId) },
+        relations: [
+          "verifications",
+          "verifications.member",
+          "group",
+          "group.president",
+          "group.accountant",
+          "group.secretary"
+        ],
+      });
+
+      if (!loan) {
+        return next(new NotFoundError("Loan not found"));
+      }
+
+      // Get approval counts
+      const approvals = loan.verifications?.filter(v => v.status === "Approved") || [];
+      const rejections = loan.verifications?.filter(v => v.status === "Rejected") || [];
+
+      const approvalStatus = {
+        loan: this.format(loan),
+        approvals: approvals.length,
+        rejections: rejections.length,
+        totalLeaders: 3,
+        neededApprovals: 3,
+        canApprove: loan.status === "pending",
+        currentUserApproved: approvals.some(v => v.member?.id === req.user?.id),
+        currentUserRejected: rejections.some(v => v.member?.id === req.user?.id),
+        currentUserCanApprove: loan.status === "pending" &&
+          !approvals.some(v => v.member?.id === req.user?.id) &&
+          !rejections.some(v => v.member?.id === req.user?.id)
+      };
+
+      res.status(200).json({
+        status: "success",
+        data: approvalStatus
       });
     }
   );

@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { RequestHandler } from "express-serve-static-core";
 import { asyncHandler } from "../utils/async-handler";
 import { Contribution } from "../entities/Contribution";
 import { Repository } from "typeorm";
@@ -64,7 +65,7 @@ export class ContributionController {
   };
 
   create = asyncHandler(
-    async (req: Request, res: Response, next: NextFunction) => {
+    async (req: Request & { file?: any }, res: Response, next: NextFunction) => {
       const {
         groupMemberId,
         depositAmount,
@@ -72,7 +73,11 @@ export class ContributionController {
         paymentMethodId,
         receivedById,
         branchId,
+        transactionId,
       } = req.body;
+
+      // Handle file upload
+      const documentReceipt = req.file ? req.file.filename : req.body.documentReceipt;
 
       const groupMember = await AppDataSource.getRepository(
         GroupMember
@@ -111,13 +116,20 @@ export class ContributionController {
         return next(new NotFoundError("Payment method not found"));
       }
 
-      const receivedBy = await AppDataSource.getRepository(User).findOne({
-        where: { id: receivedById },
-      });
+      const receivedBy = receivedById
+        ? await AppDataSource.getRepository(User).findOne({ where: { id: receivedById } })
+        : null;
 
-      if (!receivedBy) {
+      // Check if the group member is a leader (president, accountant, or secretary)
+      const isLeader =
+        groupMember.member.id === groupMember.group.president?.id ||
+        groupMember.member.id === groupMember.group.accountant?.id ||
+        groupMember.member.id === groupMember.group.secretary?.id;
+
+      if (isLeader && !receivedBy) {
         return next(new NotFoundError("User not found"));
       }
+      // For regular members, receivedBy can be null (no user account needed)
 
       // Get current saving and solidarity amounts for the member in this season
       const lastContribution = await this.repository.findOne({
@@ -156,6 +168,8 @@ export class ContributionController {
         paymentMethod,
         receivedBy,
         branch: branch,
+        documentReceipt,
+        transactionId,
       });
 
       const savedContribution = await this.repository.save(newContribution);
@@ -196,7 +210,7 @@ export class ContributionController {
   );
 
   update = asyncHandler(
-    async (req: Request, res: Response, next: NextFunction) => {
+    async (req: Request & { file?: any }, res: Response, next: NextFunction) => {
       const { recordId } = req.params;
       const {
         groupMemberId,
@@ -205,7 +219,11 @@ export class ContributionController {
         paymentMethodId,
         receivedById,
         branchId,
+        transactionId,
       } = req.body;
+
+      // Handle file upload
+      const documentReceipt = req.file ? req.file.filename : req.body.documentReceipt;
 
       let contribution = await this.repository.findOne({
         where: { id: Number(recordId) },
@@ -313,6 +331,14 @@ export class ContributionController {
         contribution.solidarityAmount = newSolidarityAmount;
       }
 
+      // Update payment method specific fields
+      if (documentReceipt !== undefined) {
+        contribution.documentReceipt = documentReceipt;
+      }
+      if (transactionId !== undefined) {
+        contribution.transactionId = transactionId;
+      }
+
       // Update the contribution
       const updatedContribution = await this.repository.save(contribution);
 
@@ -325,32 +351,12 @@ export class ContributionController {
 
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      console.log("Request query params:", req.query);
-
-      // Create a copy of the query params to modify
-      const params = { ...req.query } as QueryParams;
-
-      // Parse filters properly
-      if (req.query.filters) {
-        try {
-          let filtersStr: any = Array.isArray(req.query.filters)
-            ? req.query.filters[0]
-            : req.query.filters;
-
-          // Ensure the JSON string is properly formed
-          if (filtersStr.endsWith('}') && !filtersStr.endsWith(']}')) {
-            filtersStr = filtersStr + ']';
-          }
-
-          const parsedFilters = JSON.parse(filtersStr);
-          params.filters = Array.isArray(parsedFilters) ? parsedFilters : [parsedFilters];
-
-          console.log("Parsed filters:", params.filters);
-        } catch (error) {
-          console.log("Error parsing filters:", error);
-          params.filters = []; // Set default empty array for safety
-        }
-      }
+      // Always return all contributions for the report, with all necessary joins
+      const params: QueryParams = {
+        page: 1,
+        limit: 100,
+        filters: [],
+      };
 
       // Custom conditions array
       const customConditions = [];
@@ -389,7 +395,8 @@ export class ContributionController {
         "contributions.member",
         "contributions.group",
         "contributions.paymentMethod",
-        "contributions.receivedBy"
+        "contributions.receivedBy",
+        "contributions.branch"
       ];
 
       try {

@@ -108,7 +108,7 @@ class AuthService {
   async signIn(credentials: { email: string; password: string }) {
     const response = await this.api.post("/auth/login", credentials);
     this.setToken(response.data?.access_token);
-    this.user = response.data;
+    this.user = response.data?.user;
     return this.user;
   }
 

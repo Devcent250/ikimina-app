@@ -598,14 +598,20 @@ export default function SystemUsers() {
         <DataTableColumnHeader column={column} title="Role" />
       ),
       cell: ({ row }) => {
-        const role = row.original.role?.name || row.getValue("role");
+        // Use displayRole if present, otherwise fallback
+        const displayRole = row.original.displayRole;
+        const role = displayRole || row.original.role?.name || row.getValue("role");
         const isAdmin = row.original.isAdmin;
 
         return (
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="font-normal">
-              {role}
-            </Badge>
+            {role ? (
+              <Badge variant="outline" className="font-normal">
+                {role}
+              </Badge>
+            ) : (
+              <span>—</span>
+            )}
             {isAdmin && (
               <Badge variant="secondary" className="ml-1">
                 Admin

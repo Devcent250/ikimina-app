@@ -15,6 +15,10 @@ export const authorization = (
 
   jwt.verify(token, process.env.JWT_SECRET as string, (err: any, user: any) => {
     if (err) throw new UnauthorizedError("Unauthorized - Invalid token");
+
+    console.log("🔐 JWT Token verified successfully");
+    console.log("🔐 JWT Payload:", JSON.stringify(user, null, 2));
+
     // @ts-ignore
     req["user"] = user;
     next();

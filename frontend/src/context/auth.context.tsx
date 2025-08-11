@@ -22,6 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setloading] = useState(true);
 
   const setCurrentUser = (user:any) => {
+    console.log("AuthContext - setCurrentUser called with:", user);
     setloading(false);
     if (user) {
       setUser(user);

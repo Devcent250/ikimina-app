@@ -105,9 +105,9 @@ function FineForm({ isOpen, setIsOpen, refetch, record }) {
       });
   }
 
-  const { data: members = [] } = useQuery(
+  const { data: groupMembers = [] } = useQuery(
     [
-      "members",
+      "group-members",
       {
         groupId: form.watch("groupId"),
       },
@@ -291,13 +291,13 @@ function FineForm({ isOpen, setIsOpen, refetch, record }) {
                           <SearchSelect
                             disabled={!form.getValues("groupId")}
                             error={fieldState?.error?.message}
-                            options={members.map((e) => {
+                            options={groupMembers.map((e) => {
                               return {
-                                label: e.fullNames,
-                                value: e.id,
+                                label: e.member?.fullNames || "Unknown Member",
+                                value: e.id, // Use group member ID, not member ID
                               };
                             })}
-                            value={field?.value}
+                            value={field.value}
                             setValue={(value) => {
                               field.onChange(value);
                             }}

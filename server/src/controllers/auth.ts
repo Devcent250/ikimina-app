@@ -9,6 +9,7 @@ import { asyncHandler } from "../utils/async-handler";
 import { randomBytes } from "crypto";
 import { PasswordReset } from "../entities/PasswordReset";
 import emailTransporter from "../lib/emailTransporter";
+import { Member } from "../entities/Member";
 
 export class AuthController {
   private format = (data: User) => {
@@ -30,16 +31,77 @@ export class AuthController {
     async (req: Request, res: Response, next: NextFunction) => {
       const user = req.user;
 
-      const foundUser = await User.findOne({
+      // Try to find user in User table first
+      let foundUser = await User.findOne({
         where: {
           id: user.id,
         },
         relations: ["role", "branch", "group"],
       });
 
-      if (!foundUser) throw new NotFoundError("User not found");
+      if (foundUser) {
+        return res.json(this.format(foundUser));
+      }
 
-      res.json(this.format(foundUser));
+      // If not found in User table, try Member table (for leaders)
+      const foundMember = await Member.findOne({
+        where: {
+          id: user.id,
+        },
+        relations: ["groupMemberships", "groupMemberships.group", "groupMemberships.group.president", "groupMemberships.group.accountant", "groupMemberships.group.secretary"],
+      });
+
+      if (!foundMember) {
+        throw new NotFoundError("User not found");
+      }
+
+      // Determine leader role by checking group memberships
+      let leaderRole = null;
+      console.log("Checking leader role for member:", foundMember.id, foundMember.fullNames);
+      console.log("Group memberships:", foundMember.groupMemberships);
+
+      if (foundMember.groupMemberships && foundMember.groupMemberships.length > 0) {
+        const groupMembership = foundMember.groupMemberships[0];
+        console.log("Group membership:", groupMembership);
+
+        if (groupMembership.group) {
+          // Check if this member is a leader in any group
+          const group = groupMembership.group;
+          console.log("Group:", group);
+          console.log("Group president:", group.president);
+          console.log("Group accountant:", group.accountant);
+          console.log("Group secretary:", group.secretary);
+
+          if (group.president?.id === foundMember.id) {
+            leaderRole = "President";
+            console.log("Found as President");
+          } else if (group.accountant?.id === foundMember.id) {
+            leaderRole = "Accountant";
+            console.log("Found as Accountant");
+          } else if (group.secretary?.id === foundMember.id) {
+            leaderRole = "Secretary";
+            console.log("Found as Secretary");
+          }
+        }
+      }
+
+      console.log("Final leader role:", leaderRole);
+
+      // Format member data similar to user data
+      const memberData = {
+        id: foundMember.id,
+        name: foundMember.fullNames,
+        email: foundMember.email,
+        phone: foundMember.phone,
+        status: foundMember.isActive ? "active" : "inactive",
+        role: leaderRole ? { name: leaderRole } : null,
+        isAdmin: false,
+        type: "member",
+        group: foundMember.groupMemberships?.[0]?.group || null,
+      };
+
+      console.log("CurrentUser - Final memberData being sent:", JSON.stringify(memberData, null, 2));
+      res.json(memberData);
     }
   );
 
@@ -48,72 +110,140 @@ export class AuthController {
       // Validate request body
       const { email, password } = req.body;
 
-      // Find user by email
-      const user = await User.findOne({
+      // Try Member first (for leaders) - prioritize members over users
+      const member = await Member.findOne({
         where: { email: email },
-        select: ["id", "name", "profileUrl", "email", "password","role", "isAdmin"],
-        // relations: ["role", "branch", "group"],
+        select: ["id", "fullNames", "email", "password", "isActive"],
+        relations: ["groupMemberships", "groupMemberships.group", "groupMemberships.group.president", "groupMemberships.group.accountant", "groupMemberships.group.secretary"],
       });
 
-      if (!user) {
-        throw new BadRequestError("Invalid credentials", {
-          errors: {
-            email: "User with email is not found",
-          },
+      if (member && member.password) {
+        const isValidPassword = await bcrypt.compare(password, member.password);
+        if (!isValidPassword) {
+          throw new BadRequestError("Invalid credentials", {
+            errors: {
+              password: "Password is incorrect.",
+            },
+          });
+        }
+        // Only allow active members
+        if (member.isActive === false) {
+          throw new BadRequestError("Account is inactive", {
+            errors: {
+              email: "Account is inactive.",
+            },
+          });
+        }
+        // Determine leader role by checking group memberships
+        let leaderRole = null;
+        console.log("Login - Checking leader role for member:", member.id, member.fullNames);
+        console.log("Login - Group memberships:", member.groupMemberships);
+
+        if (member.groupMemberships && member.groupMemberships.length > 0) {
+          const groupMembership = member.groupMemberships[0];
+          console.log("Login - Group membership:", groupMembership);
+
+          if (groupMembership.group) {
+            // Check if this member is a leader in any group
+            const group = groupMembership.group;
+            console.log("Login - Group:", group);
+            console.log("Login - Group president:", group.president);
+            console.log("Login - Group accountant:", group.accountant);
+            console.log("Login - Group secretary:", group.secretary);
+
+            if (group.president?.id === member.id) {
+              leaderRole = "President";
+              console.log("Login - Found as President");
+            } else if (group.accountant?.id === member.id) {
+              leaderRole = "Accountant";
+              console.log("Login - Found as Accountant");
+            } else if (group.secretary?.id === member.id) {
+              leaderRole = "Secretary";
+              console.log("Login - Found as Secretary");
+            }
+          }
+        }
+
+        console.log("Login - Final leader role:", leaderRole);
+
+        const memberObj = {
+          id: member.id,
+          email: member.email,
+          name: member.fullNames,
+          isActive: member.isActive,
+          role: leaderRole ? { name: leaderRole } : null,
+          isAdmin: false,
+          type: "member",
+        };
+
+        console.log("Login - Final memberObj being sent:", JSON.stringify(memberObj, null, 2));
+        const access_token = jwt.sign(memberObj, process.env.JWT_SECRET, {
+          expiresIn: "7h",
+        });
+        // Optionally, you can implement refresh tokens for members as well
+        return res.json({
+          status: "success",
+          access_token,
+          user: memberObj,
         });
       }
 
-      const isValidPassword = await bcrypt.compare(password, user.password);
-      if (!isValidPassword) {
-        throw new BadRequestError("Invalid credentials", {
-          errors: {
-            password: "Password is incorrect.",
-          },
+      // Try User (for admins and regular users)
+      let user = await User.findOne({
+        where: { email: email },
+        select: [
+          "id",
+          "name",
+          "profileUrl",
+          "email",
+          "password",
+          "role",
+          "isAdmin",
+        ],
+      });
+
+      if (user) {
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+          throw new BadRequestError("Invalid credentials", {
+            errors: {
+              password: "Password is incorrect.",
+            },
+          });
+        }
+        const userObj = {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          profileUrl: user.profileUrl,
+          role: user.role,
+          isAdmin: user.isAdmin,
+          type: "user",
+        };
+        const access_token = jwt.sign(userObj, process.env.JWT_SECRET, {
+          expiresIn: "7h",
+        });
+        const refresh_token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+          expiresIn: "7d",
+        });
+        const refreshTokenRepository = AppDataSource.getRepository(RefreshToken);
+        const newRefreshToken = new RefreshToken();
+        newRefreshToken.token = refresh_token;
+        newRefreshToken.user = user;
+        newRefreshToken.expiresAt = new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000
+        ); // 7 days
+        await refreshTokenRepository.save(newRefreshToken);
+        // Set refresh token in HTTP-only cookie (if needed)
+        return res.json({
+          status: "success",
+          access_token,
+          refresh_token,
+          user: userObj,
         });
       }
 
-      const userObj = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        profileUrl: user.profileUrl,
-        role: user.role,
-        isAdmin: user.isAdmin,
-      };
 
-      // Generate JWT token
-      const access_token = jwt.sign(userObj, process.env.JWT_SECRET, {
-        expiresIn: "7h",
-      });
-
-      const refresh_token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-        expiresIn: "7d",
-      });
-
-      const refreshTokenRepository = AppDataSource.getRepository(RefreshToken);
-
-      // Save refresh token to database
-      const newRefreshToken = new RefreshToken();
-      newRefreshToken.token = refresh_token;
-      newRefreshToken.user = user;
-      newRefreshToken.expiresAt = new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000
-      ); // 7 days
-      await refreshTokenRepository.save(newRefreshToken);
-
-      // Set refresh token in HTTP-only cookie
-      res.cookie("refreshToken", refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
-
-      res.json({
-        ...this.format(user),
-        access_token,
-        isNew: false,
-      });
     }
   );
 

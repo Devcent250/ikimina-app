@@ -3,6 +3,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -34,6 +35,7 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
   .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
@@ -64,10 +66,12 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
+
 @layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -76,9 +80,103 @@
 @layer utilities {
   .first-letter-uppercase::first-letter {
     text-transform: uppercase;
-    font-size: 1.5em; /* Optional: Increase the size of the first letter */
-    font-weight: bold; /* Optional: Make the first letter bold */
+    font-size: 1.5em;
+    /* Optional: Increase the size of the first letter */
+    font-weight: bold;
+    /* Optional: Make the first letter bold */
   }
+}
+
+.print\:hidden {
+  @media print {
+    display: none !important;
+  }
+}
+
+/* Print styles: hide app chrome and keep only report area */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide sidebar, headers, and anything marked print:hidden */
+  aside,
+  header,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Remove page padding so content fits */
+  #root,
+  .print-container,
+  .recharts-default-legend {
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+
+
+  #loan-report-print {
+    width: 100% !important;
+    background: #ffffff !important;
+    padding: 0.5in !important;
+  }
+
+  /* Avoid page breaks inside cards */
+  #loan-report-print>* {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+/* Reports table styling */
+.report-table {
+  border-collapse: collapse;
+}
+
+.report-table th,
+.report-table td {
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 8px 10px;
+}
+
+.report-table thead th {
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+}
+
+.report-table tbody tr:nth-child(even) {
+  background: hsl(var(--muted) / 0.3);
+}
+
+
+.export-mono,
+.export-mono * {
+  color: #000 !important;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.export-mono .text-blue-600,
+.export-mono .text-green-600,
+.export-mono .text-orange-600,
+.export-mono .text-red-600,
+.export-mono [class*="text-"] {
+  color: #000 !important;
+}
+
+.export-mono .bg-primary,
+.export-mono .bg-secondary,
+.export-mono .bg-destructive,
+.export-mono [class*="bg-"] {
+  background: #fff !important;
+}
+
+.export-mono .border,
+.export-mono [class*="border-"] {
+  border-color: #cfcfcf !important;
 }
 
 .loader {
@@ -87,19 +185,23 @@
   border-radius: 50%;
   animation: l5 0.7s infinite linear alternate;
 }
+
 @keyframes l5 {
   0% {
     box-shadow: 20px 0 #2563eb, -20px 0 #2563eb26;
     background: #2563eb;
   }
+
   33% {
     box-shadow: 20px 0 #2563eb, -20px 0 #2563eb26;
     background: #2563eb26;
   }
+
   66% {
     box-shadow: 20px 0 #2563eb26, -20px 0 #2563eb;
     background: #2563eb26;
   }
+
   100% {
     box-shadow: 20px 0 #2563eb26, -20px 0 #2563eb;
     background: #2563eb;

@@ -8,7 +8,8 @@ export const createGroupMemberSchema = Joi.object({
   numberOfShares: Joi.number().integer().min(0).default(0),
 });
 
-export const updateGroupMemberSchema = createGroupMemberSchema.fork(
-  ["memberId", "groupId", "loanEligibility", "branchId", "numberOfShares"],
-  (schema) => schema.optional()
-);
+export const updateGroupMemberSchema = Joi.object({
+  loanEligibility: Joi.boolean().optional(),
+  branchId: Joi.number().optional(),
+  numberOfShares: Joi.number().integer().min(0).optional(),
+});
