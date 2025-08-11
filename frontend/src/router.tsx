@@ -27,6 +27,15 @@ import ContributionsReport from "./pages/ContributionsReport";
 import GeneralSeasonsReport from "./pages/GeneralSeasonsReport";
 import LoanReports from "./pages/LoansReport";
 import Districts from "./pages/Districts";
+import { 
+  GroupAccessGuard, 
+  MemberAccessGuard, 
+  ContributionAccessGuard, 
+  LoanAccessGuard, 
+  FineAccessGuard, 
+  ExpenseAccessGuard, 
+  AttendanceAccessGuard 
+} from "./components/ui/guards/GroupAccessGuard";
 
 const router = createBrowserRouter([
   {
@@ -63,9 +72,14 @@ const router = createBrowserRouter([
                 handle: { crumb: () => "Overview" },
               },
               {
-                element: <Members />,
-                path: "members",
-                handle: { crumb: () => "Members" },
+                element: <MemberAccessGuard />,
+                children: [
+                  {
+                    element: <Members />,
+                    path: "members",
+                    handle: { crumb: () => "Members" },
+                  },
+                ],
               },
               {
                 element: <Districts />,
@@ -83,34 +97,64 @@ const router = createBrowserRouter([
                 handle: { crumb: () => "Saving Seasons" },
               },
               {
-                element: <Groups />,
-                path: "saving-groups",
-                handle: { crumb: () => "Saving Groups" },
+                element: <GroupAccessGuard />,
+                children: [
+                  {
+                    element: <Groups />,
+                    path: "saving-groups",
+                    handle: { crumb: () => "Saving Groups" },
+                  },
+                ],
               },
               {
-                element: <Contributions />,
-                path: "contributions",
-                handle: { crumb: () => "Contributions" },
+                element: <ContributionAccessGuard />,
+                children: [
+                  {
+                    element: <Contributions />,
+                    path: "contributions",
+                    handle: { crumb: () => "Contributions" },
+                  },
+                ],
               },
               {
-                element: <Loans />,
-                path: "loans",
-                handle: { crumb: () => "Loans" },
+                element: <LoanAccessGuard />,
+                children: [
+                  {
+                    element: <Loans />,
+                    path: "loans",
+                    handle: { crumb: () => "Loans" },
+                  },
+                ],
               },
               {
-                element: <Fines />,
-                path: "fines",
-                handle: { crumb: () => "Fines" },
+                element: <FineAccessGuard />,
+                children: [
+                  {
+                    element: <Fines />,
+                    path: "fines",
+                    handle: { crumb: () => "Fines" },
+                  },
+                ],
               },
               {
-                element: <Expenses />,
-                path: "expenses",
-                handle: { crumb: () => "Expenses" },
+                element: <ExpenseAccessGuard />,
+                children: [
+                  {
+                    element: <Expenses />,
+                    path: "expenses",
+                    handle: { crumb: () => "Expenses" },
+                  },
+                ],
               },
               {
-                element: <Attendance />,
-                path: "attendance",
-                handle: { crumb: () => "attendance" },
+                element: <AttendanceAccessGuard />,
+                children: [
+                  {
+                    element: <Attendance />,
+                    path: "attendance",
+                    handle: { crumb: () => "attendance" },
+                  },
+                ],
               },
             ],
           },

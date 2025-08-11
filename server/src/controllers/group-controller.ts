@@ -97,6 +97,17 @@ export class GroupController {
 
   create = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
+      const user = req.user;
+
+      if (!user) {
+        return next(new Error("Authentication required"));
+      }
+
+      // Only admins can create groups
+      if (!user.isAdmin) {
+        return next(new Error("Access denied. Only administrators can create groups."));
+      }
+
       const {
         name,
         description,
@@ -332,6 +343,11 @@ export class GroupController {
   getOne = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       const { recordId } = req.params;
+      const user = req.user;
+
+      if (!user) {
+        return next(new Error("Authentication required"));
+      }
 
       const group = await this.repository.findOne({
         where: { id: Number(recordId) },
@@ -356,6 +372,31 @@ export class GroupController {
         return next(new NotFoundError("Group not found"));
       }
 
+      // Check access control
+      let hasAccess = false;
+
+      // Admin can access any group
+      if (user.isAdmin) {
+        hasAccess = true;
+      } else {
+        // Check if user is a leader of this group
+        if (group.president?.id === user.id || 
+            group.accountant?.id === user.id || 
+            group.secretary?.id === user.id) {
+          hasAccess = true;
+        } else {
+          // Check if user is a member of this group
+          const isMember = group.groupMembers?.some(gm => gm.member?.id === user.id);
+          if (isMember) {
+            hasAccess = true;
+          }
+        }
+      }
+
+      if (!hasAccess) {
+        return next(new Error("Access denied. You don't have permission to view this group."));
+      }
+
       res.status(200).json({
         status: "success",
         data: this.format(group),
@@ -366,6 +407,11 @@ export class GroupController {
   update = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       const { recordId } = req.params;
+      const user = req.user;
+
+      if (!user) {
+        return next(new Error("Authentication required"));
+      }
 
       console.log('Backend received body:', req.body);
       console.log('President Email from body:', req.body.presidentEmail);
@@ -412,6 +458,25 @@ export class GroupController {
 
       if (!group) {
         return next(new NotFoundError("Group not found"));
+      }
+
+      // Check access control - only admins and group leaders can update
+      let hasAccess = false;
+
+      // Admin can update any group
+      if (user.isAdmin) {
+        hasAccess = true;
+      } else {
+        // Check if user is a leader of this group
+        if (group.president?.id === user.id || 
+            group.accountant?.id === user.id || 
+            group.secretary?.id === user.id) {
+          hasAccess = true;
+        }
+      }
+
+      if (!hasAccess) {
+        return next(new Error("Access denied. You don't have permission to update this group."));
       }
 
       // Check if new name conflicts with existing group
@@ -556,17 +621,77 @@ export class GroupController {
 
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      // Use direct query to ensure groupMembers are loaded
-      const groups = await this.repository.find({
-        relations: [
-          "branch",
-          "groupMembers",
-          "groupMembers.branch",
-          "president",
-          "accountant",
-          "secretary",
-        ],
-      });
+      const user = req.user;
+      console.log("🔐 User requesting groups:", user);
+
+      if (!user) {
+        return next(new Error("Authentication required"));
+      }
+
+      let groups = [];
+
+      // Check if user is admin
+      if (user.isAdmin) {
+        console.log("👑 Admin user - returning all groups");
+        groups = await this.repository.find({
+          relations: [
+            "branch",
+            "groupMembers",
+            "groupMembers.branch",
+            "president",
+            "accountant",
+            "secretary",
+          ],
+        });
+      } else {
+        // For non-admin users, check if they're a group leader or member
+        console.log("👤 Non-admin user - checking group access");
+        
+        // First, check if user is a group leader (president, accountant, secretary)
+        const leaderGroups = await this.repository.find({
+          where: [
+            { president: { id: user.id } },
+            { accountant: { id: user.id } },
+            { secretary: { id: user.id } }
+          ],
+          relations: [
+            "branch",
+            "groupMembers",
+            "groupMembers.branch",
+            "president",
+            "accountant",
+            "secretary",
+          ],
+        });
+
+        if (leaderGroups.length > 0) {
+          console.log("🎯 User is a group leader - returning their groups:", leaderGroups.map(g => g.name));
+          groups = leaderGroups;
+        } else {
+          // Check if user is a member of any groups
+          const memberGroups = await this.repository
+            .createQueryBuilder("group")
+            .leftJoinAndSelect("group.branch", "branch")
+            .leftJoinAndSelect("group.groupMembers", "groupMembers")
+            .leftJoinAndSelect("groupMembers.branch", "memberBranch")
+            .leftJoinAndSelect("group.president", "president")
+            .leftJoinAndSelect("group.accountant", "accountant")
+            .leftJoinAndSelect("group.secretary", "secretary")
+            .where("groupMembers.member.id = :memberId", { memberId: user.id })
+            .getMany();
+
+          if (memberGroups.length > 0) {
+            console.log("👥 User is a group member - returning their groups:", memberGroups.map(g => g.name));
+            groups = memberGroups;
+          } else {
+            console.log("❌ User has no group access");
+            return res.json({
+              results: [],
+              total: 0,
+            });
+          }
+        }
+      }
 
       // Add debugging
       console.log("Raw groups data:", groups.map(group => ({
@@ -595,6 +720,11 @@ export class GroupController {
   delete = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       const { recordId } = req.params;
+      const user = req.user;
+
+      if (!user) {
+        return next(new Error("Authentication required"));
+      }
 
       const group = await this.repository.findOne({
         where: { id: Number(recordId) },
@@ -611,6 +741,11 @@ export class GroupController {
 
       if (!group) {
         return next(new NotFoundError("Group not found"));
+      }
+
+      // Check access control - only admins can delete groups
+      if (!user.isAdmin) {
+        return next(new Error("Access denied. Only administrators can delete groups."));
       }
 
       // Check if group has associated records

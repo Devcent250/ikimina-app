@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "react-query";
+import { usePDF } from "react-to-pdf";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import DataTable from "@/components/datatable/Datatable";
@@ -82,33 +83,8 @@ function MemberContributionsTable({
   memberId,
   onOpenContribution,
 }: MemberContributionsTableProps) {
-  const downloadReport = () => {
-    if (memberContributions.length === 0) return;
-    
-    // Create CSV content
-    const headers = ['ID', 'Date', 'Group', 'Payment Method', 'Amount (FRW)'];
-    const csvContent = [
-      headers.join(','),
-      ...memberContributions.map(c => [
-        c.id,
-        new Date(c.createdAt).toLocaleDateString(),
-        c.group?.name || '-',
-        c.paymentMethod?.name || '-',
-        (Number(c.depositAmount || 0) + Number(c.solidarityAmount || 0)).toLocaleString()
-      ].join(','))
-    ].join('\n');
-    
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `contributions_${memberContributions[0]?.member?.fullNames?.replace(/\s+/g, '_') || 'member'}_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const [isExporting, setIsExporting] = useState(false);
+  
   const { data: memberContributions = [], isLoading } = useQuery(
     ["member-contributions", memberId],
     async () => {
@@ -136,6 +112,23 @@ function MemberContributionsTable({
     { enabled: !!memberId }
   );
 
+  const { toPDF, targetRef } = usePDF({ 
+    filename: `contributions_${memberContributions?.[0]?.member?.fullNames?.replace(/\s+/g, '_') || 'member'}_${new Date().toISOString().split('T')[0]}.pdf` 
+  });
+
+  const downloadReport = async () => {
+    if (memberContributions.length === 0) return;
+    
+    try {
+      setIsExporting(true);
+      // Allow DOM to re-render without badges
+      await new Promise((r) => setTimeout(r, 0));
+      await toPDF();
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center">
@@ -152,47 +145,126 @@ function MemberContributionsTable({
         </div>
         <Button
           onClick={downloadReport}
-          disabled={memberContributions.length === 0}
+          disabled={memberContributions.length === 0 || isExporting}
           size="sm"
           variant="outline"
         >
-          <Download className="h-4 w-4 mr-2" />
-          Download Report
+          {isExporting ? (
+            <Loader className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4 mr-2" />
+          )}
+          {isExporting ? "Generating PDF..." : "Download Report"}
         </Button>
       </div>
-      <div className="border rounded-md">
-        <Table className="w-full">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[80px]">ID</TableHead>
-            <TableHead className="w-[120px]">Date</TableHead>
-            <TableHead>Group</TableHead>
-            <TableHead>Payment Method</TableHead>
-            <TableHead className="text-right w-[160px]">Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {memberContributions.map((c) => (
-            <TableRow
-              key={c.id}
-              className="cursor-pointer"
-              onClick={() => onOpenContribution(c)}
-            >
-              <TableCell className="w-[80px]">#{c.id}</TableCell>
-              <TableCell className="w-[140px]">
-                {new Date(c.createdAt).toLocaleDateString()}
-              </TableCell>
-              <TableCell>{c.group?.name || "-"}</TableCell>
-              <TableCell>{c.paymentMethod?.name || "-"}</TableCell>
-              <TableCell className="text-right w-[160px]">
-                {(
-                  Number(c.depositAmount || 0) + Number(c.solidarityAmount || 0)
-                ).toLocaleString()} FRW
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      
+      {/* PDF Export Target */}
+      <div ref={targetRef} className={`space-y-4 bg-white p-4 ${isExporting ? "export-mono" : ""}`}>
+        {/* PDF Header - only visible during export */}
+        <div className={`space-y-4 ${isExporting ? '' : 'hidden'}`}>
+          {/* Top header with date and system info */}
+          <div className="flex items-start justify-between">
+            <div className="text-sm text-muted-foreground">
+              {new Date().toLocaleDateString()}, {new Date().toLocaleTimeString()}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              ikimina management system.
+            </div>
+          </div>
+
+          {/* System branding */}
+          <div className="text-center">
+            <h3 className="text-sm font-medium text-muted-foreground">ikimina | Contributions & Payments</h3>
+          </div>
+
+          {/* Report title section */}
+          <div className="text-center">
+            <h4 className="text-sm font-medium text-muted-foreground mb-2">Member Contributions Report</h4>
+            <h2 className="text-3xl font-bold tracking-tight">
+              {memberContributions[0]?.member?.fullNames?.toUpperCase() || 'MEMBER'} CONTRIBUTIONS
+            </h2>
+          </div>
+
+          {/* Divider */}
+          <div className="border-b" />
+        </div>
+
+        {/* Regular table view */}
+        <div className="border rounded-md">
+          <Table className="w-full">
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="w-[80px] font-semibold">ID</TableHead>
+                <TableHead className="w-[120px] font-semibold">Date</TableHead>
+                <TableHead className="font-semibold">Group</TableHead>
+                <TableHead className="font-semibold">Payment Method</TableHead>
+                <TableHead className="text-right w-[160px] font-semibold">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {memberContributions.map((c, index) => (
+                <TableRow
+                  key={c.id}
+                  className={`cursor-pointer ${index % 2 === 0 ? 'bg-muted/20' : ''}`}
+                  onClick={() => onOpenContribution(c)}
+                >
+                  <TableCell className="w-[80px] font-medium">#{c.id}</TableCell>
+                  <TableCell className="w-[140px]">
+                    {new Date(c.createdAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>{c.group?.name || "-"}</TableCell>
+                  <TableCell>{c.paymentMethod?.name || "-"}</TableCell>
+                  <TableCell className="text-right w-[160px] font-medium">
+                    {(
+                      Number(c.depositAmount || 0) + Number(c.solidarityAmount || 0)
+                    ).toLocaleString()} FRW
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* PDF Footer - only visible during export */}
+        <div className={`space-y-4 ${isExporting ? '' : 'hidden'}`}>
+          <div className="border-t pt-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-medium">Total Contributions:</p>
+                <p className="text-muted-foreground">{memberContributions.length}</p>
+              </div>
+              <div>
+                <p className="font-medium">Total Amount:</p>
+                <p className="text-muted-foreground">
+                  {memberContributions.reduce((total, c) => 
+                    total + Number(c.depositAmount || 0) + Number(c.solidarityAmount || 0), 0
+                  ).toLocaleString()} FRW
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-medium">Total Deposit Amount:</p>
+                <p className="text-muted-foreground">
+                  {memberContributions.reduce((total, c) => 
+                    total + Number(c.depositAmount || 0), 0
+                  ).toLocaleString()} FRW
+                </p>
+              </div>
+              <div>
+                <p className="font-medium">Total Solidarity Amount:</p>
+                <p className="text-muted-foreground">
+                  {memberContributions.reduce((total, c) => 
+                    total + Number(c.solidarityAmount || 0), 0
+                  ).toLocaleString()} FRW
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="text-center text-xs text-muted-foreground">
+            Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -906,7 +978,12 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                   <ul className="mt-1">
                     <div className="flex text-gray-700 justify-between bg-gray-100 py-2 px-1">
                       <li>Price per share: {selectedGroup.pricePerShare}</li>
-                      <li>
+                      <li
+                        className={`${shareValidation?.isValid
+                          ? "text-green-500"
+                          : "text-red-600"
+                          }`}
+                      >
                         Allowed shares: {selectedGroup.minShares} to 10 shares
                       </li>
                     </div>
@@ -1088,6 +1165,7 @@ export default function Contributions() {
 
   const newRecordModal = useModalState();
   const confirmModal = useConfirmModal();
+  const { user } = useAuth();
 
 
   const { data: members = [] } = useQuery(["members"], async () => {
@@ -1604,10 +1682,12 @@ export default function Contributions() {
               />
             </PopoverContent>
           </Popover>
-          <Button onClick={() => newRecordModal.open()}>
-            <PlusCircle size={16} className="mr-2" />
-            Add Contribution
-          </Button>
+          {(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary") && (
+            <Button onClick={() => newRecordModal.open()}>
+              <PlusCircle size={16} className="mr-2" />
+              Add Contribution
+            </Button>
+          )}
         </div>
       </div>
 

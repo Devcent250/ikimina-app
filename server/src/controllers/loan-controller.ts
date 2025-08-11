@@ -303,32 +303,133 @@ export class LoanController {
 
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        console.log("Request query:", req.query);
+      const user = req.user;
+      
+      // Check user permissions and filter data accordingly
+      if (user.isAdmin) {
+        // Admin can see all loans - proceed with normal query
+        try {
+          console.log("Request query:", req.query);
 
-        const result = await this?.queryBuilder.buildAndExecute(
-          req.query as QueryParams,
-          [],
-          [
-            "loans.member",
-            "loans.groupMember",
-            "loans.group",
-            "loans.createdBy",
-            "loans.payments",
-            "loans.branch",
-            "loans.verifications",
-          ]
-        );
+          const result = await this?.queryBuilder.buildAndExecute(
+            req.query as QueryParams,
+            [],
+            [
+              "loans.member",
+              "loans.groupMember",
+              "loans.group",
+              "loans.createdBy",
+              "loans.payments",
+              "loans.branch",
+              "loans.verifications",
+            ]
+          );
 
-        console.log("Query result:", result);
+          console.log("Query result:", result);
 
+          res.json({
+            ...result,
+            results: result.results.map(this.format),
+          });
+        } catch (error) {
+          console.error("Error in getAll loans:", error);
+          next(error);
+        }
+      } else if (user.role?.name === "President" || user.role?.name === "Accountant" || user.role?.name === "Secretary") {
+        // Group leaders can only see loans from their groups
+        const { Group } = await import("../entities/Group");
+        const groupRepository = AppDataSource.getRepository(Group);
+        
+        // Find groups where the user is a leader
+        let userGroups = [];
+        
+        if (user.role?.name === "President") {
+          const presidentGroups = await groupRepository.find({
+            where: { president: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = presidentGroups;
+        } else if (user.role?.name === "Accountant") {
+          const accountantGroups = await groupRepository.find({
+            where: { accountant: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = accountantGroups;
+        } else if (user.role?.name === "Secretary") {
+          const secretaryGroups = await groupRepository.find({
+            where: { secretary: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = secretaryGroups;
+        }
+        
+        if (userGroups.length === 0) {
+          // User is a leader but has no groups, return empty result
+          res.json({
+            results: [],
+            pagination: {
+              page: 1,
+              limit: 25,
+              total: 0,
+              totalPages: 0
+            }
+          });
+          return;
+        }
+        
+        const groupIds = userGroups.map(g => g.id);
+        
+        // Get loans from user's groups
+        const loans = await this.repository
+          .createQueryBuilder("loan")
+          .leftJoinAndSelect("loan.member", "member")
+          .leftJoinAndSelect("loan.groupMember", "groupMember")
+          .leftJoinAndSelect("loan.group", "group")
+          .leftJoinAndSelect("loan.createdBy", "createdBy")
+          .leftJoinAndSelect("loan.payments", "payments")
+          .leftJoinAndSelect("loan.branch", "branch")
+          .leftJoinAndSelect("loan.verifications", "verifications")
+          .where("loan.group.id IN (:...groupIds)", { groupIds })
+          .orderBy("loan.createdAt", "DESC")
+          .getMany();
+        
+        const formattedResults = loans.map(this.format);
+        
         res.json({
-          ...result,
-          results: result.results.map(this.format),
+          results: formattedResults,
+          pagination: {
+            page: 1,
+            limit: loans.length,
+            total: loans.length,
+            totalPages: 1
+          }
         });
-      } catch (error) {
-        console.error("Error in getAll loans:", error);
-        next(error);
+      } else {
+        // Regular members can only see their own loans
+        const loans = await this.repository
+          .createQueryBuilder("loan")
+          .leftJoinAndSelect("loan.member", "member")
+          .leftJoinAndSelect("loan.groupMember", "groupMember")
+          .leftJoinAndSelect("loan.group", "group")
+          .leftJoinAndSelect("loan.createdBy", "createdBy")
+          .leftJoinAndSelect("loan.payments", "payments")
+          .leftJoinAndSelect("loan.branch", "branch")
+          .leftJoinAndSelect("loan.verifications", "verifications")
+          .where("loan.member.id = :memberId", { memberId: user.id })
+          .orderBy("loan.createdAt", "DESC")
+          .getMany();
+        
+        const formattedResults = loans.map(this.format);
+        
+        res.json({
+          results: formattedResults,
+          pagination: {
+            page: 1,
+            limit: loans.length,
+            total: loans.length,
+            totalPages: 1
+          }
+        });
       }
     }
   );

@@ -67,6 +67,7 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useAuth } from "@/context/auth.context";
 
 const formSchema = z
   .object({
@@ -910,6 +911,7 @@ onClick = { form.handleSubmit(onSubmit) }
 }
 
 export default function Groups() {
+  const { user } = useAuth();
   const [recordToEdit, setRecordToEdit] = useState(undefined);
   const [searchText, setSearchText] = useState("");
   const [columnFilters, setColumnFilters] = useState([]);
@@ -962,7 +964,7 @@ export default function Groups() {
   };
 
   const columns: ColumnDef<any>[] = [
-    {
+    ...(user?.isAdmin ? [{
       id: "select",
       header: ({ table }) => (
         <Checkbox
@@ -983,7 +985,7 @@ className="translate-y-[2px]"
       ),
 enableSorting: false,
   enableHiding: false,
-    },
+    }] : []),
 {
   accessorKey: "id",
     header: ({ column }) => (
@@ -1184,20 +1186,27 @@ enableSorting: false,
               >
   View Details
     </DropdownMenuItem>
-    < DropdownMenuItem
-onClick = {() => {
-  setRecordToEdit(row?.original);
-}}
+                {(user?.isAdmin || 
+              row.original.president?.id === user?.id || 
+              row.original.accountant?.id === user?.id || 
+              row.original.secretary?.id === user?.id) && (
+              <DropdownMenuItem
+                onClick={() => {
+                  setRecordToEdit(row?.original);
+                }}
               >
-  Update Group
-    </DropdownMenuItem>
-    < DropdownMenuItem
-onClick = {() => {
-  confirmModal.open({ meta: row?.original });
-}}
+                Update Group
+              </DropdownMenuItem>
+            )}
+            {user?.isAdmin && (
+              <DropdownMenuItem
+                onClick={() => {
+                  confirmModal.open({ meta: row?.original });
+                }}
               >
-  Delete Group
-    </DropdownMenuItem>
+                Delete Group
+              </DropdownMenuItem>
+            )}
     </DropdownMenuContent>
     </DropdownMenu>
     </div>
@@ -1428,57 +1437,81 @@ numberOfMonths = { 2}
   />
   </PopoverContent>
   </Popover>
-  < Button
-onClick = {() => {
-  newRecordModal.open();
-}}
-size = "sm"
-  >
-  <PlusCircle size={ 16 } className = "mr-2" />
-    <span>Add new Group </span>
-      </Button>
+  {user?.isAdmin && (
+    <Button
+      onClick={() => {
+        newRecordModal.open();
+      }}
+      size="sm"
+    >
+      <PlusCircle size={16} className="mr-2" />
+      <span>Add new Group</span>
+    </Button>
+  )}
       </div>
       </div>
 
-      < DataTable
-isFetching = { recordsQuery.isFetching }
-defaultColumnVisibility = {{ }}
-isLoading = { recordsQuery.status === "loading" }
-data = { recordsQuery?.data?.items || []}
-columns = { columns }
-onSearch = {(e) => {
-  setSearchText(e);
-}}
-sorting = { sorting }
-setSorting = { setSorting }
-pageCount = { recordsQuery?.data?.totalPages }
-setPagination = { setPagination }
-pageIndex = { pageIndex }
-pageSize = { pageSize }
-setColumnFilters = { setColumnFilters }
-columnFilters = { columnFilters }
-facets = {
-  [
-    {
-      name: "branch",
-      title: "Branch",
-      type: "select",
-      options: branches,
-    },
-    {
-      name: "meetingFrequency",
-      title: "Meeting Frequency",
-      type: "select",
-      options: meetingFrequencyOptions,
-    },
-    {
-      name: "isActive",
-      title: "Status",
-      type: "select",
-      options: statusOptions,
-    },
+      {recordsQuery?.data?.items?.length === 0 && !recordsQuery.isLoading ? (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <p className="text-muted-foreground mb-2">
+              {user?.isAdmin 
+                ? "No groups found. Create your first group to get started."
+                : "You don't have access to any groups. Contact your administrator for access."
+              }
+            </p>
+            {user?.isAdmin && (
+              <Button
+                onClick={() => newRecordModal.open()}
+                size="sm"
+                className="mt-2"
+              >
+                <PlusCircle size={16} className="mr-2" />
+                Create First Group
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <DataTable
+          isFetching={recordsQuery.isFetching}
+          defaultColumnVisibility={{}}
+          isLoading={recordsQuery.status === "loading"}
+          data={recordsQuery?.data?.items || []}
+          columns={columns}
+          onSearch={(e) => {
+            setSearchText(e);
+          }}
+          sorting={sorting}
+          setSorting={setSorting}
+          pageCount={recordsQuery?.data?.totalPages}
+          setPagination={setPagination}
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          setColumnFilters={setColumnFilters}
+          columnFilters={columnFilters}
+          facets={[
+            {
+              name: "branch",
+              title: "Branch",
+              type: "select",
+              options: branches,
+            },
+            {
+              name: "meetingFrequency",
+              title: "Meeting Frequency",
+              type: "select",
+              options: meetingFrequencyOptions,
+            },
+            {
+              name: "isActive",
+              title: "Status",
+              type: "select",
+              options: statusOptions,
+            },
           ]}
-  />
+        />
+      )}
   </div>
 
   < GroupForm

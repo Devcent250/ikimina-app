@@ -39,7 +39,7 @@ import useConfirmModal from "@/hooks/useConfirmModal";
 import ConfirmModal from "@/components/modal/ConfirmModal";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye } from "lucide-react";
+
 import {
   Select,
   SelectContent,
@@ -853,20 +853,24 @@ function LoanRequestTab({
   setColumnFilters,
   columnFilters,
   setSearchText,
-  newRecordModal,
-  setRecordToEdit
+  newRecordModal
+  // setRecordToEdit
 }) {
+  const { user } = useAuth();
+  
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Loan Requests</h3>
-        <Button
-          onClick={() => newRecordModal.open()}
-          size="sm"
-        >
-          <PlusCircle size={16} className="mr-2" />
-          <span>Add new Loan</span>
-        </Button>
+        {(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary") && (
+          <Button
+            onClick={() => newRecordModal.open()}
+            size="sm"
+          >
+            <PlusCircle size={16} className="mr-2" />
+            <span>Add new Loan</span>
+          </Button>
+        )}
       </div>
 
       <DataTable
@@ -939,7 +943,7 @@ function ReportsTab() {
   };
 
   const outstandingBalance = (loanReports?.totalAmount || 0) - (loanReports?.totalRepaid || 0);
-  const averageLoan = loanReports?.totalLoans ? Math.round((loanReports.totalAmount || 0) / loanReports.totalLoans) : 0;
+  // const averageLoan = loanReports?.totalLoans ? Math.round((loanReports.totalAmount || 0) / loanReports.totalLoans) : 0;
 
   if (isLoading) {
     return (
@@ -1258,26 +1262,26 @@ function MemberLoanHistory({ memberId }: { memberId: number | null }) {
   const totalBorrowed = memberLoans.reduce((sum, loan) => sum + Number(loan.amount || 0), 0);
   const totalRepaid = memberLoans.reduce((sum, loan) => sum + Number(loan.totalPaid || 0), 0);
   const outstandingBalance = totalBorrowed - totalRepaid;
-  const averageLoan = totalBorrowed > 0 ? Math.round(totalBorrowed / memberLoans.length) : 0;
+  // const averageLoan = totalBorrowed > 0 ? Math.round(totalBorrowed / memberLoans.length) : 0;
 
-  const handlePayment = (loan: any) => {
-    setPaymentModal({
-      isOpen: true,
-      loanId: loan.id,
-      loanAmount: loan.amount,
-      memberName: loan.memberName || loan.member?.fullNames || "Unknown Member",
-      amount: "",
-      paymentMethod: "",
-      notes: "",
-      totalLoanAmount: Number(loan.amount || 0),
-      outstandingAmount: Number(loan.dueAmount ?? loan.amount ?? 0),
-      totalPaid: Number(loan.totalPaid || 0),
-      loanType: loan.loanType || "Unknown",
-      showSummary: true,
-      transactionId: "",
-      document: null,
-    });
-  };
+  // const handlePayment = (loan: any) => {
+  //   setPaymentModal({
+  //     isOpen: true,
+  //     loanId: loan.id,
+  //     loanAmount: loan.amount,
+  //     memberName: loan.memberName || loan.member?.fullNames || "Unknown Member",
+  //     amount: "",
+  //     paymentMethod: "",
+  //     notes: "",
+  //     totalLoanAmount: Number(loan.amount || 0),
+  //     outstandingAmount: Number(loan.dueAmount ?? loan.amount ?? 0),
+  //     totalPaid: Number(loan.totalPaid || 0),
+  //     loanType: loan.loanType || "Unknown",
+  //     showSummary: true,
+  //     transactionId: "",
+  //     document: null,
+  //   });
+  // };
 
   // Open payment modal for overall outstanding amount (no specific loan selected yet)
   const handlePayAll = () => {
@@ -1617,7 +1621,7 @@ function MemberLoanHistory({ memberId }: { memberId: number | null }) {
                     return;
                   }
 
-                  const response = await api.post(`/loans/${paymentModal.loanId}/payments`, {
+                  await api.post(`/loans/${paymentModal.loanId}/payments`, {
                     amount: paymentAmount,
                     paymentMethodId: Number(paymentModal.paymentMethod),
                     notes: paymentModal.notes,
@@ -1651,9 +1655,10 @@ function MemberLoanHistory({ memberId }: { memberId: number | null }) {
 export default function Loans() {
   const [recordToEdit, setRecordToEdit] = useState(undefined);
   const [activeTab, setActiveTab] = useState("loan-request");
+  const { user } = useAuth();
 
   const columns: ColumnDef<any>[] = [
-    {
+    ...(user?.isAdmin ? [{
       id: "select",
       header: ({ table }) => (
         <Checkbox
@@ -1679,7 +1684,7 @@ export default function Loans() {
       ),
       enableSorting: false,
       enableHiding: false,
-    },
+    }] : []),
     {
       accessorKey: "createdAt",
       header: ({ column }) => (
@@ -2222,7 +2227,6 @@ export default function Loans() {
               columnFilters={columnFilters}
               setSearchText={setSearchText}
               newRecordModal={newRecordModal}
-              setRecordToEdit={setRecordToEdit}
             />
           </TabsContent>
 

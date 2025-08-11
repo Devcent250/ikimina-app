@@ -317,16 +317,110 @@ export class MemberController {
 
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      // First get the base query result without relations
-      const baseResult = await this.queryBuilder.buildAndExecute(
-        req.query as QueryParams
-      );
+      const user = req.user;
+      
+      // Check user permissions and filter data accordingly
+      if (user.isAdmin) {
+        // Admin can see all members - proceed with normal query
+        const baseResult = await this.queryBuilder.buildAndExecute(
+          req.query as QueryParams
+        );
 
-      // Then manually fetch all members with their complete relations
-      if (baseResult.results.length > 0) {
-        const memberIds = baseResult.results.map(member => member.id);
+        // Then manually fetch all members with their complete relations
+        if (baseResult.results.length > 0) {
+          const memberIds = baseResult.results.map(member => member.id);
 
-        const membersWithRelations = await this.repository
+          const membersWithRelations = await this.repository
+            .createQueryBuilder("member")
+            .leftJoinAndSelect("member.branch", "branch")
+            .leftJoinAndSelect("member.groupMemberships", "groupMemberships")
+            .leftJoinAndSelect("groupMemberships.group", "group")
+            .leftJoinAndSelect("groupMemberships.branch", "groupMembershipsBranch")
+            .leftJoinAndSelect("member.contributions", "contributions")
+            .leftJoinAndSelect("member.loans", "loans")
+            .whereInIds(memberIds)
+            .getMany();
+
+          // Map the members by ID for easy lookup
+          const memberMap = new Map();
+          membersWithRelations.forEach(member => {
+            memberMap.set(member.id, {
+              ...member,
+              groups: member.groupMemberships?.map(gm => gm.group).filter(Boolean) || []
+            });
+          });
+
+          // Replace the results with the enhanced members
+          const enhancedResults = baseResult.results.map(member =>
+            memberMap.get(member.id) || member
+          );
+
+          // Format all members with leader roles
+          const formattedResults = await Promise.all(
+            enhancedResults.map(member => this.format(member))
+          );
+
+          res.json({
+            ...baseResult,
+            results: formattedResults,
+          });
+        } else {
+          // Format all members with leader roles
+          const formattedResults = await Promise.all(
+            baseResult.results.map(member => this.format(member))
+          );
+
+          res.json({
+            ...baseResult,
+            results: formattedResults,
+          });
+        }
+      } else if (user.role?.name === "President" || user.role?.name === "Accountant" || user.role?.name === "Secretary") {
+        // Group leaders can only see members from their groups
+        const { Group } = await import("../entities/Group");
+        const groupRepository = AppDataSource.getRepository(Group);
+        
+        // Find groups where the user is a leader
+        let userGroups = [];
+        
+        if (user.role?.name === "President") {
+          const presidentGroups = await groupRepository.find({
+            where: { president: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = presidentGroups;
+        } else if (user.role?.name === "Accountant") {
+          const accountantGroups = await groupRepository.find({
+            where: { accountant: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = accountantGroups;
+        } else if (user.role?.name === "Secretary") {
+          const secretaryGroups = await groupRepository.find({
+            where: { secretary: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = secretaryGroups;
+        }
+        
+        if (userGroups.length === 0) {
+          // User is a leader but has no groups, return empty result
+          res.json({
+            results: [],
+            pagination: {
+              page: 1,
+              limit: 25,
+              total: 0,
+              totalPages: 0
+            }
+          });
+          return;
+        }
+        
+        const groupIds = userGroups.map(g => g.id);
+        
+        // Get members from user's groups
+        const members = await this.repository
           .createQueryBuilder("member")
           .leftJoinAndSelect("member.branch", "branch")
           .leftJoinAndSelect("member.groupMemberships", "groupMemberships")
@@ -334,41 +428,53 @@ export class MemberController {
           .leftJoinAndSelect("groupMemberships.branch", "groupMembershipsBranch")
           .leftJoinAndSelect("member.contributions", "contributions")
           .leftJoinAndSelect("member.loans", "loans")
-          .whereInIds(memberIds)
+          .where("groupMemberships.group.id IN (:...groupIds)", { groupIds })
           .getMany();
-
-        // Map the members by ID for easy lookup
-        const memberMap = new Map();
-        membersWithRelations.forEach(member => {
-          memberMap.set(member.id, {
-            ...member,
-            groups: member.groupMemberships?.map(gm => gm.group).filter(Boolean) || []
-          });
-        });
-
-        // Replace the results with the enhanced members
-        const enhancedResults = baseResult.results.map(member =>
-          memberMap.get(member.id) || member
-        );
-
-        // Format all members with leader roles
+        
+        // Format members with leader roles
         const formattedResults = await Promise.all(
-          enhancedResults.map(member => this.format(member))
+          members.map(member => this.format(member))
         );
-
+        
         res.json({
-          ...baseResult,
           results: formattedResults,
+          pagination: {
+            page: 1,
+            limit: members.length,
+            total: members.length,
+            totalPages: 1
+          }
         });
       } else {
-        // Format all members with leader roles
-        const formattedResults = await Promise.all(
-          baseResult.results.map(member => this.format(member))
-        );
-
+        // Regular members can only see their own member record
+        const member = await this.repository.findOne({
+          where: { id: user.id },
+          relations: ["branch", "groupMemberships", "groupMemberships.group", "contributions", "loans"]
+        });
+        
+        if (!member) {
+          res.json({
+            results: [],
+            pagination: {
+              page: 1,
+              limit: 25,
+              total: 0,
+              totalPages: 0
+            }
+          });
+          return;
+        }
+        
+        const formattedMember = await this.format(member);
+        
         res.json({
-          ...baseResult,
-          results: formattedResults,
+          results: [formattedMember],
+          pagination: {
+            page: 1,
+            limit: 1,
+            total: 1,
+            totalPages: 1
+          }
         });
       }
     }

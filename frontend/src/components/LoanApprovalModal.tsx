@@ -124,21 +124,7 @@ export default function LoanApprovalModal({
         });
     };
 
-    const getStatusIcon = (verification: any) => {
-        if (!verification) return <Clock className="h-4 w-4 text-gray-400" />;
-        if (verification.status === "Approved") {
-            return <CheckCircle className="h-4 w-4 text-green-500" />;
-        }
-        return <XCircle className="h-4 w-4 text-red-500" />;
-    };
 
-    const getStatusBadge = (verification: any) => {
-        if (!verification) return <Badge variant="secondary">Pending</Badge>;
-        if (verification.status === "Approved") {
-            return <Badge variant="default" className="bg-green-500">Approved</Badge>;
-        }
-        return <Badge variant="destructive">Rejected</Badge>;
-    };
 
     // Helper function to check if current user can approve
     const canUserApprove = () => {

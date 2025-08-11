@@ -14,6 +14,7 @@ import {
   User,
   Users,
   Building2,
+  Calendar,
 } from "lucide-react";
 
 import { NavMain } from "@/components/ui/nav-main";
@@ -58,44 +59,44 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           icon: LayoutGrid,
           isActive: pathname.startsWith("/dashboard"),
         },
-        {
+        ...(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary" ? [{
           title: "Savings Members",
           url: "/members",
           icon: User,
           isActive: pathname.startsWith("/members"),
-        },
-        {
+        }] : []),
+        ...(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary" ? [{
           title: "Contributions",
           url: "/contributions",
           icon: HandCoins,
           isActive: pathname.startsWith("/contributions"),
-        },
-        {
+        }] : []),
+        ...(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary" ? [{
           title: "Loans & Payments",
           url: "/loans",
           icon: MinusCircle,
           isActive: pathname.startsWith("/loans"),
-        },
+        }] : []),
         // fines & penalties
-        {
+        ...(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary" ? [{
           title: "Fines & Penalties",
           url: "/fines",
           icon: Ticket,
           isActive: pathname.startsWith("/fines"),
-        },
+        }] : []),
         // expenses
-        {
+        ...(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary" ? [{
           title: "Expenses & Bills",
           url: "/expenses",
           icon: ShoppingBag,
           isActive: pathname.startsWith("/expenses"),
-        },
-        {
+        }] : []),
+        ...(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary" ? [{
           title: "Saving Groups",
           url: "/saving-groups",
           icon: Users,
           isActive: pathname.startsWith("/saving-groups"),
-        },
+        }] : []),
         {
           title: "Districts",
           url: "/districts",
@@ -114,7 +115,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           icon: Blocks,
           isActive: pathname.startsWith("/saving-seasons"),
         },
-        {
+        ...(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary" ? [{
+          title: "Attendance",
+          url: "/attendance",
+          icon: Calendar,
+          isActive: pathname.startsWith("/attendance"),
+        }] : []),
+        ...(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary" ? [{
           title: "Reports & Analytics",
           url: "#",
           icon: Activity,
@@ -137,7 +144,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               url: "/reports/expense-reports",
             },
           ],
-        },
+        }] : []),
       ],
       projects: [
         {

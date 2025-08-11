@@ -1,6 +1,7 @@
 import express from "express";
 import { GroupController } from "../controllers/group-controller";
 import { validateSchema } from "../middleware/validation.middleware";
+import { authorization } from "../middleware/auth.middleware";
 import {
   createGroupSchema,
   updateGroupSchema,
@@ -10,16 +11,18 @@ const router = express.Router({ mergeParams: true });
 
 const controller = new GroupController();
 
-router.post("/", validateSchema(createGroupSchema), controller.create);
+router.post("/", authorization, validateSchema(createGroupSchema), controller.create);
 router.get(
   "/my-group",
+  authorization,
   controller.getMyGroup
 );
-router.delete("/:recordId", controller.delete);
-router.get("/", controller.getAll);
-router.get("/:recordId", controller.getOne);
+router.delete("/:recordId", authorization, controller.delete);
+router.get("/", authorization, controller.getAll);
+router.get("/:recordId", authorization, controller.getOne);
 router.patch(
   "/:recordId",
+  authorization,
   validateSchema(updateGroupSchema),
   controller.update
 );

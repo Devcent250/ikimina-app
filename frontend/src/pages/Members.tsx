@@ -857,7 +857,7 @@ export default function Members() {
   );
 
   const columns: ColumnDef<any>[] = [
-    {
+    ...(user?.isAdmin ? [{
       id: "select",
       header: ({ table }) => (
         <Checkbox
@@ -881,7 +881,7 @@ export default function Members() {
       ),
       enableSorting: false,
       enableHiding: false,
-    },
+    }] : []),
     {
       accessorKey: "id",
       header: ({ column }) => (
@@ -922,15 +922,7 @@ export default function Members() {
               >
                 {row.original.firstName} {row.original.lastName}
               </button>
-              {(row.original.groupMemberships?.length > 0 ||
-                row.original.contributions?.length > 0 ||
-                row.original.loans?.length > 0) && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
-                      Has related data
-                    </Badge>
-                  </div>
-                )}
+
             </div>
           </div>
         );
@@ -974,7 +966,9 @@ export default function Members() {
       ),
       cell: ({ row }) => {
         return (
-          <div className="flex items-center gap-3">{row.getValue("phone")}</div>
+          <div className="flex items-center gap-3">
+            {row.getValue("phone")}
+          </div>
         );
       },
       enableSorting: false,
@@ -988,7 +982,7 @@ export default function Members() {
       cell: ({ row }) => {
         return (
           <div className="flex items-center gap-3">
-            {row.getValue("branch")}
+            {row.original.branch?.name}
           </div>
         );
       },
@@ -1001,67 +995,30 @@ export default function Members() {
         <DataTableColumnHeader column={column} title="Groups" />
       ),
       cell: ({ row }) => {
-        const groups = row.getValue("groups") as { id: string | number, name: string }[] | undefined;
+        const groups = row.original.groups || [];
 
-        // No groups case
-        if (!groups || groups.length === 0) {
+        if (groups.length === 0) {
           return <span className="text-muted-foreground text-sm">No groups</span>;
         }
 
-        // Show up to 2 groups directly, with a "+X more" badge if there are additional groups
-        const maxVisibleBadges = 2;
-        const visibleGroups = groups.slice(0, maxVisibleBadges);
-        const remainingCount = groups.length - maxVisibleBadges;
-
         return (
-          <div className="flex flex-wrap items-center gap-1.5 max-w-[200px]">
-            {visibleGroups.map((group) => (
-              <TooltipProvider key={group.id}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge
-                      variant="outline"
-                      className="bg-primary/10 text-primary hover:bg-primary/20 transition-colors px-2 py-0.5 text-xs font-normal"
-                    >
-                      {group.name || "Unnamed Group"}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{group.name}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+          <div className="flex flex-wrap gap-1">
+            {groups.slice(0, 2).map((group, index) => (
+              <Badge
+                key={index}
+                variant="outline"
+                className="text-xs px-1.5 py-0.5"
+              >
+                {group.name}
+              </Badge>
             ))}
-
-            {remainingCount > 0 && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge
-                      variant="secondary"
-                      className="bg-secondary/80 hover:bg-secondary text-secondary-foreground cursor-default px-2 py-0.5 text-xs"
-                    >
-                      <PlusCircle className="h-3 w-3 mr-1" />
-                      {remainingCount} more
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <div className="space-y-1 max-w-[200px]">
-                      <p className="font-light text-sm">Additional Groups:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {groups.slice(maxVisibleBadges).map(group => (
-                          <Badge key={group.id} variant="outline" className="bg-muted">
-                            {group.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+            {groups.length > 2 && (
+              <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                {groups.length - 2} More
+              </Badge>
             )}
           </div>
-        )
+        );
       },
       enableSorting: false,
       enableHiding: false,
@@ -1074,14 +1031,13 @@ export default function Members() {
       cell: ({ row }) => {
         return (
           <div className="flex items-center gap-3">
-            {(row.getValue("currentSavings") || 0)?.toLocaleString()} FRW
+            {row.getValue("currentSavings")} FRW
           </div>
         );
       },
       enableSorting: false,
       enableHiding: false,
     },
-    // mariage status
     {
       accessorKey: "marriageStatus",
       header: ({ column }) => (
@@ -1097,7 +1053,6 @@ export default function Members() {
       enableSorting: false,
       enableHiding: false,
     },
-    // source of income
     {
       accessorKey: "sourceOfIncome",
       header: ({ column }) => (
@@ -1153,52 +1108,49 @@ export default function Members() {
               >
                 View Details
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setRecordToEdit(row?.original);
-                }}
-              >
-                Update Member
-              </DropdownMenuItem>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        confirmModal.open({ meta: row?.original });
-                      }}
-                      disabled={
-                        row.original.groupMemberships?.length > 0 ||
-                        row.original.contributions?.length > 0 ||
-                        row.original.loans?.length > 0
-                      }
-                      className={
-                        row.original.groupMemberships?.length > 0 ||
+              {(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary") && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    setRecordToEdit(row?.original);
+                  }}
+                >
+                  Update Member
+                </DropdownMenuItem>
+              )}
+              {user?.isAdmin && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          confirmModal.open({ meta: row?.original });
+                        }}
+                        disabled={
+                          row.original.groupMemberships?.length > 0 ||
                           row.original.contributions?.length > 0 ||
                           row.original.loans?.length > 0
-                          ? "opacity-50 cursor-not-allowed"
-                          : ""
-                      }
-                    >
-                      Delete Member
-                      {(row.original.groupMemberships?.length > 0 ||
-                        row.original.contributions?.length > 0 ||
-                        row.original.loans?.length > 0) && (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            (Has related data)
-                          </span>
-                        )}
-                    </DropdownMenuItem>
-                  </TooltipTrigger>
-                  {(row.original.groupMemberships?.length > 0 ||
-                    row.original.contributions?.length > 0 ||
-                    row.original.loans?.length > 0) && (
-                      <TooltipContent>
-                        <p>Cannot delete member with active group memberships, contributions, or loans</p>
-                      </TooltipContent>
-                    )}
-                </Tooltip>
-              </TooltipProvider>
+                        }
+                        className={
+                          row.original.groupMemberships?.length > 0 ||
+                            row.original.contributions?.length > 0 ||
+                            row.original.loans?.length > 0
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
+                        }
+                      >
+                        Delete Member
+                      </DropdownMenuItem>
+                    </TooltipTrigger>
+                    {(row.original.groupMemberships?.length > 0 ||
+                      row.original.contributions?.length > 0 ||
+                      row.original.loans?.length > 0) && (
+                        <TooltipContent>
+                          <p>Cannot delete member with active group memberships, contributions, or loans</p>
+                        </TooltipContent>
+                      )}
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -1501,10 +1453,12 @@ export default function Members() {
                 />
               </PopoverContent>
             </Popover>
-            <Button onClick={() => newRecordModal.open()}>
-              <PlusCircle size={16} className="mr-2" />
-              Add Member
-            </Button>
+            {user?.isAdmin && (
+              <Button onClick={() => newRecordModal.open()}>
+                <PlusCircle size={16} className="mr-2" />
+                Add Member
+              </Button>
+            )}
           </div>
         </div>
 

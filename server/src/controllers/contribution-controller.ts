@@ -351,70 +351,166 @@ export class ContributionController {
 
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      // Always return all contributions for the report, with all necessary joins
-      const params: QueryParams = {
-        page: 1,
-        limit: 100,
-        filters: [],
-      };
+      const user = req.user;
+      
+      // Check user permissions and filter data accordingly
+      if (user.isAdmin) {
+        // Admin can see all contributions - proceed with normal query
+        const params: QueryParams = {
+          page: 1,
+          limit: 100,
+          filters: [],
+        };
 
-      // Custom conditions array
-      const customConditions = [];
+        // Custom conditions array
+        const customConditions = [];
 
-      // *** ADD THIS NEW CODE HERE ***
-      // Check for member filter and handle it specially
-      if (params.filters && params.filters.length > 0) {
-        const memberFilter = params.filters.find(f => f.field === "member" && f.operator === "in");
-        if (memberFilter) {
-          console.log("Found member filter:", memberFilter);
-          // Convert the filter to use member.id instead
-          customConditions.push({
-            where: `member.id IN (:...memberIds)`,
-            parameters: { memberIds: memberFilter.value }
-          });
+        // *** ADD THIS NEW CODE HERE ***
+        // Check for member filter and handle it specially
+        if (params.filters && params.filters.length > 0) {
+          const memberFilter = params.filters.find(f => f.field === "member" && f.operator === "in");
+          if (memberFilter) {
+            console.log("Found member filter:", memberFilter);
+            // Convert the filter to use member.id instead
+            customConditions.push({
+              where: `member.id IN (:...memberIds)`,
+              parameters: { memberIds: memberFilter.value }
+            });
 
-          // Remove the original member filter as we're handling it separately
-          params.filters = params.filters.filter(f => f.field !== "member");
-          console.log("Updated filters after member handling:", params.filters);
+            // Remove the original member filter as we're handling it separately
+            params.filters = params.filters.filter(f => f.field !== "member");
+            console.log("Updated filters after member handling:", params.filters);
+          }
         }
-      }
-      // *** END OF NEW CODE ***
+        // *** END OF NEW CODE ***
 
-      // Handle search specifically for member names
-      if (params.search) {
-        customConditions.push({
-          where: `(member.firstName ILIKE :search OR member.lastName ILIKE :search)`,
-          parameters: { search: `%${params.search}%` }
-        });
-        // Remove the search parameter since we're handling it manually
-        delete params.search;
-      }
+        // Handle search specifically for member names
+        if (params.search) {
+          customConditions.push({
+            where: `(member.firstName ILIKE :search OR member.lastName ILIKE :search)`,
+            parameters: { search: `%${params.search}%` }
+          });
+          // Remove the search parameter since we're handling it manually
+          delete params.search;
+        }
 
-      // Add custom joins for related entities
-      const customJoins = [
-        "contributions.member",
-        "contributions.group",
-        "contributions.paymentMethod",
-        "contributions.receivedBy",
-        "contributions.branch"
-      ];
+        // Add custom joins for related entities
+        const customJoins = [
+          "contributions.member",
+          "contributions.group",
+          "contributions.paymentMethod",
+          "contributions.receivedBy",
+          "contributions.branch"
+        ];
 
-      try {
-        const result = await this.queryBuilder.buildAndExecute(
-          params,
-          customConditions,
-          customJoins
-        );
+        try {
+          const result = await this.queryBuilder.buildAndExecute(
+            params,
+            customConditions,
+            customJoins
+          );
 
-        console.log(`Found ${result.results?.length || 0} contributions`);
+          console.log(`Found ${result.results?.length || 0} contributions`);
 
+          res.json({
+            ...result,
+            results: result.results?.map(this.format) || []
+          });
+        } catch (error) {
+          console.error("Query execution error:", error);
+          next(error);
+        }
+      } else if (user.role?.name === "President" || user.role?.name === "Accountant" || user.role?.name === "Secretary") {
+        // Group leaders can only see contributions from their groups
+        const { Group } = await import("../entities/Group");
+        const groupRepository = AppDataSource.getRepository(Group);
+        
+        // Find groups where the user is a leader
+        let userGroups = [];
+        
+        if (user.role?.name === "President") {
+          const presidentGroups = await groupRepository.find({
+            where: { president: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = presidentGroups;
+        } else if (user.role?.name === "Accountant") {
+          const accountantGroups = await groupRepository.find({
+            where: { accountant: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = accountantGroups;
+        } else if (user.role?.name === "Secretary") {
+          const secretaryGroups = await groupRepository.find({
+            where: { secretary: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = secretaryGroups;
+        }
+        
+        if (userGroups.length === 0) {
+          // User is a leader but has no groups, return empty result
+          res.json({
+            results: [],
+            pagination: {
+              page: 1,
+              limit: 25,
+              total: 0,
+              totalPages: 0
+            }
+          });
+          return;
+        }
+        
+        const groupIds = userGroups.map(g => g.id);
+        
+        // Get contributions from user's groups
+        const contributions = await this.repository
+          .createQueryBuilder("contribution")
+          .leftJoinAndSelect("contribution.member", "member")
+          .leftJoinAndSelect("contribution.group", "group")
+          .leftJoinAndSelect("contribution.paymentMethod", "paymentMethod")
+          .leftJoinAndSelect("contribution.receivedBy", "receivedBy")
+          .leftJoinAndSelect("contribution.branch", "branch")
+          .where("contribution.group.id IN (:...groupIds)", { groupIds })
+          .orderBy("contribution.createdAt", "DESC")
+          .getMany();
+        
+        const formattedResults = contributions.map(this.format);
+        
         res.json({
-          ...result,
-          results: result.results?.map(this.format) || []
+          results: formattedResults,
+          pagination: {
+            page: 1,
+            limit: contributions.length,
+            total: contributions.length,
+            totalPages: 1
+          }
         });
-      } catch (error) {
-        console.error("Query execution error:", error);
-        next(error);
+      } else {
+        // Regular members can only see their own contributions
+        const contributions = await this.repository
+          .createQueryBuilder("contribution")
+          .leftJoinAndSelect("contribution.member", "member")
+          .leftJoinAndSelect("contribution.group", "group")
+          .leftJoinAndSelect("contribution.paymentMethod", "paymentMethod")
+          .leftJoinAndSelect("contribution.receivedBy", "receivedBy")
+          .leftJoinAndSelect("contribution.branch", "branch")
+          .where("contribution.member.id = :memberId", { memberId: user.id })
+          .orderBy("contribution.createdAt", "DESC")
+          .getMany();
+        
+        const formattedResults = contributions.map(this.format);
+        
+        res.json({
+          results: formattedResults,
+          pagination: {
+            page: 1,
+            limit: contributions.length,
+            total: contributions.length,
+            totalPages: 1
+          }
+        });
       }
     }
   );
