@@ -1,0 +1,25 @@
+import express from "express";
+
+import { DashboardController } from "../controllers/dashboard-controller";
+
+const router = express.Router({ mergeParams: true });
+
+const controller = new DashboardController();
+
+router.get("/dashboard-data", controller.getDashboardData);
+router.get(
+  "/current-month-contributions",
+  controller.getCurrentMonthContributions
+);
+// savings by group
+router.get("/savings-by-group", controller.getSavingsByGroup);
+
+router.get(
+  "/loans-distributions-per-group",
+  controller.getLoansDistributionsPerGroup
+);
+
+router.get("/loan-reports", controller.getLoanReports);
+router.get("/test-loans", controller.testLoansData);
+
+export default router;

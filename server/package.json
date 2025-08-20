@@ -1,0 +1,50 @@
+{
+  "name": "resto-portal-backend",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node --files src/index.ts",
+    "build": "tsc",
+    "migration:generate": "sh -c 'npx typeorm-ts-node-commonjs migration:generate ./src/database/migrations/$0 -d ./src/data-source.ts'",
+    "migration:create": "npx typeorm-ts-node-commonjs migration:create -d ./src/data-source.ts",
+    "migration:run": "npx typeorm-ts-node-commonjs migration:run -d ./src/data-source.ts",
+    "migration:revert": "npx typeorm-ts-node-commonjs  migration:revert -d ./src/data-source.ts",
+    "db:seed": "npx ts-node src/scripts/seedPermissions.ts",
+    "db:seed:all": "yarn run db:seed && npm run db:seed",
+    "create:president": "npx ts-node src/scripts/createPresidentUserCLI.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "bcryptjs": "^2.4.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "cors": "^2.8.5",
+    "csv-parser": "^3.2.0",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "fs-extra": "^11.2.0",
+    "google-auth-library": "^9.15.0",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.10.0",
+    "otp-generator": "^4.0.1",
+    "pg": "^8.13.1",
+    "reflect-metadata": "^0.2.2",
+    "slug": "^10.0.0",
+    "typeorm": "^0.3.20",
+    "xlsx": "^0.18.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.9.0",
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
