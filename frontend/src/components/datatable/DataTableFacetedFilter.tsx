@@ -19,7 +19,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
 
 import "react-datepicker/dist/react-datepicker.css";
 import {
@@ -76,18 +75,7 @@ export function DataTableFacetedFilter<TData, TValue>({
 
   const { from, to } = dates;
 
-  return type === "input" ? (
-    <div className="relative">
-      <Input
-        placeholder={title}
-        value={(column?.getFilterValue() as string) ?? ""}
-        onChange={(event) =>
-          column?.setFilterValue(event.target.value)
-        }
-        className="h-8 w-[150px] lg:w-[250px]"
-      />
-    </div>
-  ) : type === "date" ? (
+  return type === "date" ? (
     <div className="relative">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

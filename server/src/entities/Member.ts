@@ -69,6 +69,9 @@ export class Member extends BaseEntity {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ type: "varchar", length: 4, nullable: false, unique: true })
+  memberCode: string; // 4-digit code for mobile app login
+
   @ManyToOne(() => Branch, (branch) => branch.members)
   @JoinColumn()
   branch: Branch;

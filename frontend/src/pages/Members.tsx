@@ -1,11 +1,12 @@
+import { useEffect, useState } from "react";
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import DataTableColumnHeader from "@/components/datatable/DataTableColumnHeader";
 import { Loader, MoreVertical, PlusCircle, Calendar as CalendarIcon } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useQuery } from "react-query";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import DataTable from "@/components/datatable/Datatable";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,20 +24,8 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
 } from "@/components/ui/form";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
-} from "@/components/ui/sheet";
-import * as z from "zod";
-import { toast } from "sonner";
-import useConfirmModal from "@/hooks/useConfirmModal";
-import ConfirmModal from "@/components/modal/ConfirmModal";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -72,6 +61,12 @@ import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import * as z from "zod";
+import useConfirmModal from "@/hooks/useConfirmModal";
+import ConfirmModal from "@/components/modal/ConfirmModal";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 
 const formSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
@@ -100,22 +95,19 @@ const formSchema = z.object({
   districtId: z.string().min(1, "District is required"),
   groupIds: z.array(z.string()).optional(),
   branchId: z.string().min(1, "Branch is required"),
-  // Role assignments for admin
-  roleAssignments: z.array(z.object({
-    groupId: z.string(),
-    role: z.enum(["President", "Accountant", "Secretary"]),
-    email: z.string().email("Invalid email format"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
-  })).optional().default([]),
+  memberCode: z.string().length(4, "Member code must be exactly 4 digits").regex(/^\d{4}$/, "Member code must be 4 digits"),
+  role: z.enum(["President", "Secretary", "Accountant", "Member"], {
+    required_error: "Role is required",
+  }),
+  email: z.string().email("Invalid email").optional(),
+  password: z.string().min(6, "Password must be at least 6 characters").optional(),
 });
 
 function MemberForm({ isOpen, setIsOpen, refetch, record }) {
+  // Track if leader role is already taken in selected group(s)
+  const [roleConflict, setRoleConflict] = useState<string | null>(null);
   const { user } = useAuth();
   const canPerformActions = canPerformAdminActions(user);
-
-  // For the form, we'll pass the isGroupLeader as a prop or determine it differently
-  // For now, let's assume if user is not admin but has access to this form, they might be a group leader
-  const isGroupLeader = !user?.isAdmin && user?.email && !canPerformActions;
 
   // Extract group IDs helper function
   const extractGroupIds = (record) => {
@@ -155,7 +147,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
         districtId: record?.branch?.district?.id?.toString() || "",
         branchId: record?.branch?.id?.toString() || "",
         groupIds: extractGroupIds(record),
-        roleAssignments: [],
+        memberCode: record?.memberCode || "",
       }
       : {
         firstName: "",
@@ -172,7 +164,8 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
         groupIds: [],
         districtId: "",
         branchId: "",
-        roleAssignments: [],
+        memberCode: "",
+        role: undefined,
       },
   });
 
@@ -278,6 +271,39 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
   }, [form.watch("branchId"), refetchGroups]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    // Only enforce for leader roles
+    const leaderRoles = ["President", "Secretary", "Accountant"];
+    if (leaderRoles.includes(values.role) && values.groupIds && values.groupIds.length > 0) {
+      try {
+        // Check for each group if the role is already taken
+        const conflicts = [];
+        for (const groupId of values.groupIds) {
+          // Fetch members of the group
+          const { data } = await api.get(`/groups/${groupId}/members`, {
+            params: {
+              filters: [
+                { field: "role", operator: "eq", value: values.role },
+              ],
+            },
+          });
+          // If any member found with the same role and not the current record, it's a conflict
+          const taken = data.results?.find((m) => !record || m.id !== record.id);
+          if (taken) {
+            conflicts.push(taken.group?.name || groupId);
+          }
+        }
+        if (conflicts.length > 0) {
+          form.setError("role", {
+            type: "manual",
+            message: `This group${conflicts.length > 1 ? 's' : ''} already ha${conflicts.length > 1 ? 've' : 's'} a ${values.role}.`,
+          });
+          return;
+        }
+      } catch (err) {
+        toast.error("Failed to validate group leader role.");
+        return;
+      }
+    }
     // Extract districtId from the form values before submission since the API doesn't expect it
     const q = record
       ? api.patch(`/members/${record.id}`, values)
@@ -286,15 +312,9 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
     return q
       .then(() => {
         refetch();
-
-        const hasRoleAssignments = values.roleAssignments && values.roleAssignments.length > 0;
-        const successMessage = record
-          ? "Member updated successfully"
-          : hasRoleAssignments
-            ? "Member created successfully with leadership roles assigned. They can now login with their credentials."
-            : "Member created successfully";
-
-        toast.success(successMessage);
+        toast.success(
+          record ? "Member updated successfully" : "Member created successfully"
+        );
         setIsOpen(false);
         form.reset();
       })
@@ -340,6 +360,26 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                   <div className="grid grid-cols-2 gap-3">
                     <FormField
                       control={form.control}
+                      name="memberCode"
+                      render={({ field, fieldState }) => (
+                        <FormItem>
+                          <FormLabel>Member Code (4 digits)</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g. 1234"
+                              error={fieldState?.error?.message}
+                              maxLength={4}
+                              pattern="\d{4}"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
                       name="districtId"
                       render={({ field, fieldState }) => (
                         <FormItem>
@@ -348,7 +388,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                             <Select
                               onValueChange={field.onChange}
                               value={field.value}
-                              disabled={!canPerformActions} // Disable district selection for non-admin users (including group leaders)
+                              disabled={!canPerformActions} // Disable district selection for non-admin users
                             >
                               <FormControl>
                                 <SelectTrigger error={fieldState?.error?.message}>
@@ -381,7 +421,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                             <Select
                               onValueChange={field.onChange}
                               value={field.value}
-                              disabled={!form.watch("districtId") || !canPerformActions} // Disable branch selection if no district or non-admin (including group leaders)
+                              disabled={!form.watch("districtId") || !canPerformActions} // Disable branch selection if no district or non-admin
                             >
                               <FormControl>
                                 <SelectTrigger error={fieldState?.error?.message}>
@@ -412,7 +452,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                           <FormLabel>Groups</FormLabel>
                           <FormControl>
                             <MultiSelect
-                              disabled={!form.watch("branchId") || (!canPerformActions && !isGroupLeader)} // Allow group leaders to see their group
+                              disabled={!form.watch("branchId") || !canPerformActions} // Disable group selection if no branch or non-admin
                               options={
                                 groups?.map((g) => ({
                                   value: g.id.toString(),
@@ -420,7 +460,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                                 })) || []
                               }
                               value={field.value || []}
-                              onChange={isGroupLeader ? () => { } : field.onChange} // Prevent group leaders from changing group
+                              onChange={field.onChange}
                               placeholder="Select groups"
                               error={fieldState?.error?.message}
                             />
@@ -428,137 +468,6 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                         </FormItem>
                       )}
                     />
-
-                    {/* Role Assignment Section (Admin Only, Create Mode Only) */}
-                    {canPerformActions && !record && (
-                      <div className="col-span-2 space-y-3 border-t pt-4">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-medium text-gray-900">Assign Leadership Roles (Optional)</h3>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const currentRoles = form.getValues("roleAssignments") || [];
-                              form.setValue("roleAssignments", [
-                                ...currentRoles,
-                                { groupId: "", role: "President", email: "", password: "" }
-                              ]);
-                            }}
-                            disabled={!form.watch("groupIds")?.length}
-                          >
-                            Add Role
-                          </Button>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Assign this member as a leader in selected groups. They will receive login credentials.
-                        </p>
-
-                        {form.watch("roleAssignments")?.map((_, index) => (
-                          <div key={index} className="space-y-3 p-3 border rounded-lg bg-gray-50">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">Role Assignment #{index + 1}</span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  const current = form.getValues("roleAssignments") || [];
-                                  current.splice(index, 1);
-                                  form.setValue("roleAssignments", current);
-                                }}
-                              >
-                                Remove
-                              </Button>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                              <FormField
-                                control={form.control}
-                                name={`roleAssignments.${index}.groupId`}
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Group</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                      <FormControl>
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select group" />
-                                        </SelectTrigger>
-                                      </FormControl>
-                                      <SelectContent>
-                                        {groups
-                                          ?.filter(g => form.watch("groupIds")?.includes(g.id.toString()))
-                                          ?.map((group) => (
-                                            <SelectItem key={group.id} value={group.id.toString()}>
-                                              {group.name}
-                                            </SelectItem>
-                                          ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </FormItem>
-                                )}
-                              />
-
-                              <FormField
-                                control={form.control}
-                                name={`roleAssignments.${index}.role`}
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Role</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                      <FormControl>
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select role" />
-                                        </SelectTrigger>
-                                      </FormControl>
-                                      <SelectContent>
-                                        <SelectItem value="President">President</SelectItem>
-                                        <SelectItem value="Accountant">Accountant</SelectItem>
-                                        <SelectItem value="Secretary">Secretary</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </FormItem>
-                                )}
-                              />
-
-                              <FormField
-                                control={form.control}
-                                name={`roleAssignments.${index}.email`}
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Login Email</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="email"
-                                        placeholder="leader@example.com"
-                                        {...field}
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-
-                              <FormField
-                                control={form.control}
-                                name={`roleAssignments.${index}.password`}
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Login Password</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="password"
-                                        placeholder="Enter password"
-                                        {...field}
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -616,6 +525,79 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                         </FormItem>
                       )}
                     />
+
+                    <FormField
+                      control={form.control}
+                      name="role"
+                      render={({ field, fieldState }) => (
+                        <FormItem className="col-span-2">
+                          <FormLabel>Role *</FormLabel>
+                          <FormControl>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger error={fieldState?.error?.message}>
+                                  <SelectValue placeholder="Select role" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="President">President</SelectItem>
+                                <SelectItem value="Secretary">Secretary</SelectItem>
+                                <SelectItem value="Accountant">Accountant</SelectItem>
+                                <SelectItem value="Member">Member</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {form.watch('role') && form.watch('role') !== 'Member' && (
+                      roleConflict ? (
+                        <div className="col-span-2 text-red-600 text-sm font-medium mb-2">{roleConflict}</div>
+                      ) : (
+                        <>
+                          <FormField
+                            control={form.control}
+                            name="email"
+                            render={({ field, fieldState }) => (
+                              <FormItem className="col-span-2">
+                                <FormLabel>Email</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="email"
+                                    placeholder="Enter email"
+                                    error={fieldState?.error?.message}
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="password"
+                            render={({ field, fieldState }) => (
+                              <FormItem className="col-span-2">
+                                <FormLabel>Password</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="password"
+                                    placeholder="Enter password"
+                                    error={fieldState?.error?.message}
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </>
+                      )
+                    )}
                     <FormField
                       control={form.control}
                       name="gender"
@@ -802,6 +784,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                     />
                   </div>
                 </div>
+
               </div>
             </ScrollArea>
 
@@ -861,7 +844,9 @@ export default function Members() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const { user } = useAuth();
-  const canPerformActions = canPerformAdminActions(user);  // Add separate queries for filter options
+  const canPerformActions = canPerformAdminActions(user);
+
+  // Add separate queries for filter options
   const { data: branches = [] } = useQuery(["branches"], async () => {
     const { data } = await api.get("/branches");
     return data.results.map(branch => ({
@@ -990,16 +975,6 @@ export default function Members() {
       };
     },
   });
-
-  // Check if the current user is a group leader by checking if they have leadership roles
-  const currentUserMember = recordsQuery.data?.items?.find(member =>
-    member.email === user?.email ||
-    (member.firstName && member.lastName && user?.name &&
-      user.name.includes(member.firstName.trim()) && user.name.includes(member.lastName.trim()))
-  );
-
-  const isGroupLeader = currentUserMember && currentUserMember.leaderRoles &&
-    currentUserMember.leaderRoles.length > 0 && !user?.isAdmin;
 
   // Add query for member details
   const memberDetailsQuery = useQuery(
@@ -1611,13 +1586,7 @@ export default function Members() {
                 />
               </PopoverContent>
             </Popover>
-            {user?.isAdmin && (
-              <Button onClick={() => newRecordModal.open()}>
-                <PlusCircle size={16} className="mr-2" />
-                Add Member
-              </Button>
-            )}
-            {isGroupLeader && (
+            {(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary") && (
               <Button onClick={() => newRecordModal.open()}>
                 <PlusCircle size={16} className="mr-2" />
                 Add Member

@@ -97,18 +97,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           icon: Users,
           isActive: pathname.startsWith("/saving-groups"),
         }] : []),
-        {
+        ...(user?.isAdmin ? [{
           title: "Districts",
           url: "/districts",
           icon: Building2,
           isActive: pathname.startsWith("/districts"),
-        },
-        {
+        }] : []),
+        ...(user?.isAdmin ? [{
           title: "Zones",
           url: "/zones",
           icon: Folder,
           isActive: pathname.startsWith("/zones"),
-        },
+        }] : []),
         {
           title: "Saving Seasons",
           url: "/saving-seasons",

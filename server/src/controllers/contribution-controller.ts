@@ -353,44 +353,27 @@ export class ContributionController {
     async (req: Request, res: Response, next: NextFunction) => {
       const user = req.user;
 
-      console.log("=== CONTRIBUTIONS FILTER DEBUG ===");
-      console.log("Raw query params:", req.query);
-      console.log("User:", { id: user.id, isAdmin: user.isAdmin, role: user.role?.name });
-
-      // Check user permissions and filter data accordingly
       if (user.isAdmin) {
-        // Parse query parameters
-        let filters = [];
-        try {
-          filters = req.query.filters ? JSON.parse(req.query.filters as string) : [];
-        } catch (e) {
-          console.log("Error parsing filters:", e);
-          filters = [];
-        }
-
         const params: QueryParams = {
-          page: parseInt(req.query.page as string) || 1,
-          limit: parseInt(req.query.page_size as string) || 100,
-          filters: filters,
-          search: req.query.search as string,
-          sortBy: req.query.sortBy as string || "createdAt",
-          order: req.query.order as "ASC" | "DESC" || "DESC"
+          page: Number(req.query.page) || 1,
+          limit: Number(req.query.page_size) || 25,
+          filters: req.query.filters ? (typeof req.query.filters === 'string' ? JSON.parse(req.query.filters) : req.query.filters) : [],
+          search: req.query.search ? String(req.query.search) : undefined,
+          sortBy: req.query.sortBy ? String(req.query.sortBy) : undefined,
+          order: req.query.order && (String(req.query.order).toUpperCase() === 'ASC' || String(req.query.order).toUpperCase() === 'DESC')
+            ? String(req.query.order).toUpperCase() as 'ASC' | 'DESC'
+            : undefined,
         };
-
-        console.log("Parsed params:", JSON.stringify(params, null, 2));
 
         // Custom conditions array
         const customConditions = [];
 
+        // *** ADD THIS NEW CODE HERE ***
         // Check for member filter and handle it specially
         if (params.filters && params.filters.length > 0) {
-          console.log("Processing filters:", params.filters);
-
           const memberFilter = params.filters.find(f => f.field === "member" && f.operator === "in");
           if (memberFilter) {
             console.log("Found member filter:", memberFilter);
-            console.log("Member IDs to filter:", memberFilter.value);
-
             // Convert the filter to use member.id instead
             customConditions.push({
               where: `member.id IN (:...memberIds)`,
@@ -401,38 +384,8 @@ export class ContributionController {
             params.filters = params.filters.filter(f => f.field !== "member");
             console.log("Updated filters after member handling:", params.filters);
           }
-
-          // Handle ID filter
-          const idFilter = params.filters.find(f => f.field === "id");
-          if (idFilter) {
-            console.log("Found ID filter:", idFilter);
-            customConditions.push({
-              where: `contributions.id::text ILIKE :idSearch`,
-              parameters: { idSearch: `%${idFilter.value}%` }
-            });
-
-            // Remove the original ID filter as we're handling it separately
-            params.filters = params.filters.filter(f => f.field !== "id");
-          }
-
-          // Handle date range filter
-          const dateFilter = params.filters.find(f => f.field === "createdAt" && f.operator === "between");
-          if (dateFilter && Array.isArray(dateFilter.value) && dateFilter.value.length === 2) {
-            console.log("Found date filter:", dateFilter);
-            customConditions.push({
-              where: `contributions.createdAt BETWEEN :startDate AND :endDate`,
-              parameters: {
-                startDate: dateFilter.value[0],
-                endDate: dateFilter.value[1]
-              }
-            });
-
-            // Remove the original date filter as we're handling it separately
-            params.filters = params.filters.filter(f => f.field !== "createdAt");
-          }
         }
-
-        console.log("Final custom conditions:", JSON.stringify(customConditions, null, 2));
+        // *** END OF NEW CODE ***
 
         // Handle search specifically for member names
         if (params.search) {
@@ -462,9 +415,13 @@ export class ContributionController {
 
           console.log(`Found ${result.results?.length || 0} contributions`);
 
+          // Calculate totalPages for pagination
+          const totalPages = Math.ceil((result.total || 0) / (result.limit || 25));
+
           res.json({
             ...result,
-            results: result.results?.map(this.format) || []
+            results: result.results?.map(this.format) || [],
+            totalPages,
           });
         } catch (error) {
           console.error("Query execution error:", error);

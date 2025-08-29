@@ -56,7 +56,7 @@ export const AppDataSource = new DataSource({
     User,
   ],
   migrations: MIGRATION_FILES,
-  migrationsRun: false,
+  migrationsRun: true, // Enable migrations to run automatically
   logging: false,
-  synchronize: process.env.NODE_ENV === "development",
+  synchronize: process.env.NODE_ENV === "development", // Re-enabled after fixing memberCode issue
 });

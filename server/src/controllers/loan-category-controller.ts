@@ -38,22 +38,6 @@ export class LoanCategoryController {
                 branchId,
             } = req.body;
 
-            // Validate amounts - maxAmount should not override contribution-based limits
-            if (maxAmount && maxAmount > 0) {
-                // Add a warning note about contribution-based limits
-                console.log(`Warning: Category max amount (${maxAmount}) may be overridden by member contribution limits (3x contributions)`);
-            }
-
-            // Validate that minAmount is not greater than defaultAmount
-            if (minAmount && defaultAmount && minAmount > defaultAmount) {
-                return next(new BadRequestError("Minimum amount cannot be greater than default amount"));
-            }
-
-            // Validate that defaultAmount is not greater than maxAmount (if set)
-            if (maxAmount && defaultAmount && defaultAmount > maxAmount) {
-                return next(new BadRequestError("Default amount cannot be greater than maximum amount"));
-            }
-
             // Validate optional branch if provided
             let branch: Branch | null = null;
             if (branchId) {
@@ -88,10 +72,7 @@ export class LoanCategoryController {
 
             res.status(201).json({
                 status: "success",
-                data: {
-                    ...savedCategory,
-                    note: "Maximum loan amounts are ultimately limited by member contributions (3x total contributions)"
-                },
+                data: savedCategory,
             });
         }
     );
@@ -152,21 +133,6 @@ export class LoanCategoryController {
                 throw new NotFoundError("Loan category not found");
             }
 
-            // Validate amounts before updating
-            const newMinAmount = minAmount !== undefined ? minAmount : category.minAmount;
-            const newDefaultAmount = defaultAmount !== undefined ? defaultAmount : category.defaultAmount;
-            const newMaxAmount = maxAmount !== undefined ? maxAmount : category.maxAmount;
-
-            // Validate that minAmount is not greater than defaultAmount
-            if (newMinAmount && newDefaultAmount && newMinAmount > newDefaultAmount) {
-                return next(new BadRequestError("Minimum amount cannot be greater than default amount"));
-            }
-
-            // Validate that defaultAmount is not greater than maxAmount (if set)
-            if (newMaxAmount && newDefaultAmount && newDefaultAmount > newMaxAmount) {
-                return next(new BadRequestError("Default amount cannot be greater than maximum amount"));
-            }
-
             // Update fields
             if (name !== undefined) category.name = name;
             if (description !== undefined) category.description = description;
@@ -180,10 +146,7 @@ export class LoanCategoryController {
 
             res.status(200).json({
                 status: "success",
-                data: {
-                    ...updatedCategory,
-                    note: "Maximum loan amounts are ultimately limited by member contributions (3x total contributions)"
-                },
+                data: updatedCategory,
             });
         }
     );

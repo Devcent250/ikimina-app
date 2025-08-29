@@ -122,25 +122,11 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
   };
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    // Validate loan amount against maximum allowed
-    if (maxLoanData && !maxLoanData.loanEligible) {
-      toast.error(maxLoanData.message);
-      return;
-    }
-
-    if (maxLoanData && values.amount > maxLoanData.effectiveMaxAmount) {
-      toast.error(
-        `Loan amount (${values.amount.toLocaleString()} FRW) exceeds maximum allowed amount (${maxLoanData.effectiveMaxAmount.toLocaleString()} FRW)`
-      );
-      return;
-    }
-
     // Find the selected category by ID
     const selectedCategory = loanCategories?.find(cat => String(cat.id) === String(values.loanType));
     const payload = {
       ...values,
       groupMemberId: Number(values.groupMemberId),
-      seasonId: currentSeason?.id,
       groupId: Number(values.groupId),
       branchId: Number(values.branchId),
       loanType: selectedCategory ? selectedCategory.name : "", // Send enum name
@@ -219,44 +205,6 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
     return data.results;
   });
 
-  // Get current active season
-  const { data: currentSeason } = useQuery(["current-season"], async () => {
-    const { data } = await api.get("/seasons/current");
-    return data;
-  });
-
-  // Get maximum loan amount for selected member
-  const { data: maxLoanData, isLoading: loadingMaxLoan } = useQuery(
-    [
-      "max-loan-amount",
-      {
-        groupMemberId: form.watch("groupMemberId"),
-        seasonId: currentSeason?.id,
-        loanType: form.watch("loanType"),
-      },
-    ],
-    async () => {
-      if (!form.watch("groupMemberId") || !currentSeason?.id) return null;
-
-      const params = new URLSearchParams();
-      const loanTypeId = form.watch("loanType");
-      if (loanTypeId && loanCategories) {
-        const selectedLoanCategory = loanCategories.find(cat => String(cat.id) === String(loanTypeId));
-        if (selectedLoanCategory?.name) {
-          params.append('loanType', selectedLoanCategory.name);
-        }
-      }
-
-      const { data } = await api.get(
-        `/loans/max-amount/${form.watch("groupMemberId")}/${currentSeason.id}?${params.toString()}`
-      );
-      return data;
-    },
-    {
-      enabled: Boolean(form.watch("groupMemberId")) && Boolean(currentSeason?.id),
-    }
-  );
-
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen} >
       <SheetContent className="w-full flex flex-col !gap-0  p-0 md:max-w-xl overflow-y-auto" >
@@ -331,33 +279,6 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                             onChange={e => field.onChange(Number(e.target.value))}
                           />
                         </FormControl>
-                        {maxLoanData && form.watch("groupMemberId") && (
-                          <div className="text-sm space-y-1">
-                            {maxLoanData.loanEligible ? (
-                              <div className="text-green-600">
-                                ✓ Maximum loan amount: <span className="font-semibold">{maxLoanData.effectiveMaxAmount.toLocaleString()} FRW</span>
-                                <div className="text-xs text-muted-foreground space-y-1">
-                                  <div>Based on contributions: {maxLoanData.contributionBasedMaxAmount.toLocaleString()} FRW (3x {maxLoanData.totalContributions.toLocaleString()} FRW)</div>
-                                  {maxLoanData.categoryInfo && (
-                                    <div>Category limit ({maxLoanData.categoryInfo.name}): {maxLoanData.categoryInfo.maxAmount ? maxLoanData.categoryInfo.maxAmount.toLocaleString() + ' FRW' : 'No limit'}</div>
-                                  )}
-                                  {maxLoanData.limitedBy === 'category' && (
-                                    <div className="text-amber-600">⚠️ Limited by loan category maximum</div>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="text-red-600">
-                                ✗ {maxLoanData.message}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {loadingMaxLoan && form.watch("groupMemberId") && (
-                          <div className="text-sm text-muted-foreground">
-                            Loading loan eligibility...
-                          </div>
-                        )}
                       </FormItem>
                     )}
                   />
@@ -763,9 +684,6 @@ function LoanCategoryForm({ isOpen, setIsOpen, refetch, record }) {
                           {...field}
                         />
                       </FormControl>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        <span className="text-amber-600">⚠️ Note:</span> Individual loan limits are determined by member contributions (3x total contributions), which may override this category maximum.
-                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -939,7 +857,7 @@ function LoanRequestTab({
   // setRecordToEdit
 }) {
   const { user } = useAuth();
-
+  
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">

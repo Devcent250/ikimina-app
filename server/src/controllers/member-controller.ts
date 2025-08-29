@@ -9,17 +9,12 @@ import { QueryParams } from "../types/QueryParams";
 import { GroupMember } from "../entities/GroupMember";
 import { District } from "../entities/District";
 import { Branch } from "../entities/Branch";
-import { Group } from "../entities/Group";
-import { User } from "../entities/User";
-import bcrypt from "bcrypt";
 
 export class MemberController {
   private repository: Repository<Member> = AppDataSource.getRepository(Member);
   private groupMemberRepository: Repository<GroupMember> = AppDataSource.getRepository(GroupMember);
   private districtRepository: Repository<District> = AppDataSource.getRepository(District);
   private branchRepository: Repository<Branch> = AppDataSource.getRepository(Branch);
-  private groupRepository: Repository<Group> = AppDataSource.getRepository(Group);
-  private userRepository: Repository<User> = AppDataSource.getRepository(User);
   private queryBuilder: QueryBuilder<Member>;
 
   constructor() {
@@ -86,75 +81,6 @@ export class MemberController {
     };
   };
 
-  // Helper to ensure leader credentials and user record with transaction
-  private async ensureLeaderCredentialsWithTransaction(queryRunner: any, member: Member, email: string, password: string) {
-    console.log('Ensuring leader credentials for:', member.fullNames, email);
-
-    // Update member credentials
-    const memberHashedPassword = await bcrypt.hash(password, 10);
-    member.email = email;
-    member.password = memberHashedPassword;
-    await queryRunner.manager.save(Member, member);
-    console.log('Updated member with credentials:', member.email);
-
-    // Ensure user record exists/updated
-    let user = await queryRunner.manager.findOne(User, { where: { email } });
-    const userHashedPassword = await bcrypt.hash(password, 10);
-    if (!user) {
-      user = queryRunner.manager.create(User, {
-        name: member.fullNames,
-        first_name: member.firstName,
-        last_name: member.lastName,
-        email,
-        password: userHashedPassword,
-        status: "active",
-        isAdmin: false,
-      });
-    } else {
-      user.password = userHashedPassword;
-      user.name = member.fullNames;
-      user.first_name = member.firstName;
-      user.last_name = member.lastName;
-      user.status = "active";
-    }
-    await queryRunner.manager.save(User, user);
-    console.log('Ensured user record:', user.email);
-  }
-
-  // Helper to ensure leader credentials and user record
-  private async ensureLeaderCredentials(member: Member, email: string, password: string) {
-    console.log('Ensuring leader credentials for:', member.fullNames, email);
-
-    // Update member credentials
-    member.email = email;
-    member.password = await bcrypt.hash(password, 10);
-    await this.repository.save(member);
-    console.log('Updated member with credentials:', member.email);
-
-    // Ensure user record exists/updated
-    let user = await this.userRepository.findOne({ where: { email } });
-    const hashedPassword = await bcrypt.hash(password, 10);
-    if (!user) {
-      user = this.userRepository.create({
-        name: member.fullNames,
-        first_name: member.firstName,
-        last_name: member.lastName,
-        email,
-        password: hashedPassword,
-        status: "active",
-        isAdmin: false,
-      });
-    } else {
-      user.password = hashedPassword;
-      user.name = member.fullNames;
-      user.first_name = member.firstName;
-      user.last_name = member.lastName;
-      user.status = "active";
-    }
-    await this.userRepository.save(user);
-    console.log('Ensured user record:', user.email);
-  }
-
   create = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       // Check if member with same ID number already exists
@@ -177,154 +103,84 @@ export class MemberController {
         req.body.fullNames = `${req.body.firstName} ${req.body.lastName}`;
       }
 
-      const { groupIds, districtId, branchId, roleAssignments, ...memberData } = req.body;
+      const { groupIds, districtId, branchId, ...memberData } = req.body;
 
-      // Start a transaction to ensure data consistency
-      const queryRunner = AppDataSource.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
+      // memberCode validation is already handled by the schema validator
 
-      try {
-        // Validate district exists
-        const district = await queryRunner.manager.findOne(District, {
-          where: { id: districtId },
-          relations: ["branches"]
-        });
+      // Validate district exists
+      const district = await this.districtRepository.findOne({
+        where: { id: districtId },
+        relations: ["branches"]
+      });
 
-        if (!district) {
-          await queryRunner.rollbackTransaction();
-          return next(new NotFoundError("District not found"));
-        }
-
-        // If branchId is provided, validate it belongs to the district
-        let branch: Branch | undefined;
-        if (branchId) {
-          branch = district.branches.find(b => b.id === branchId);
-          if (!branch) {
-            await queryRunner.rollbackTransaction();
-            return next(new BadRequestError("Selected branch does not belong to the selected district"));
-          }
-        } else if (district.branches.length > 0) {
-          // If no branch specified, use the first branch in the district
-          branch = district.branches[0];
-        } else {
-          await queryRunner.rollbackTransaction();
-          return next(new BadRequestError("No branches available in the selected district"));
-        }
-
-        const newMember = queryRunner.manager.create(Member, {
-          ...memberData,
-          branch: { id: branch.id }
-        });
-
-        // Save the member
-        const savedMember = await queryRunner.manager.save(Member, newMember) as Member;
-
-        if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
-          // Create group memberships
-          for (const groupId of groupIds.filter(id => id && id.trim() !== "")) {
-            try {
-              if (!groupId || isNaN(parseInt(groupId))) {
-                continue;
-              }
-
-              const groupMembership = queryRunner.manager.create(GroupMember, {
-                member: { id: savedMember.id },
-                group: { id: parseInt(groupId) },
-                branch: { id: branch.id }
-              });
-
-              await queryRunner.manager.save(GroupMember, groupMembership);
-            } catch (error) {
-              console.error(`Error creating group membership for group ${groupId}:`, error);
-            }
-          }
-        }
-
-        // Handle role assignments
-        if (roleAssignments && Array.isArray(roleAssignments) && roleAssignments.length > 0) {
-          for (const roleAssignment of roleAssignments) {
-            try {
-              const { groupId, role, email, password } = roleAssignment;
-
-              // Validate group exists
-              const group = await queryRunner.manager.findOne(Group, {
-                where: { id: groupId },
-                relations: ["president", "accountant", "secretary"]
-              });
-
-              if (!group) {
-                console.error(`Group with ID ${groupId} not found`);
-                continue;
-              }
-
-              // Check if the role is already assigned
-              const roleField = role.toLowerCase() as 'president' | 'accountant' | 'secretary';
-              if (group[roleField]) {
-                console.error(`${role} role is already assigned in group "${group.name}"`);
-                continue;
-              }
-
-              // Ensure member has group membership
-              let groupMembership = await queryRunner.manager.findOne(GroupMember, {
-                where: {
-                  member: { id: savedMember.id },
-                  group: { id: groupId }
-                }
-              });
-
-              if (!groupMembership) {
-                groupMembership = queryRunner.manager.create(GroupMember, {
-                  member: { id: savedMember.id },
-                  group: { id: groupId },
-                  branch: { id: branch.id },
-                  loanEligibility: true,
-                  numberOfShares: 0,
-                });
-                await queryRunner.manager.save(GroupMember, groupMembership);
-              }
-
-              // Set up leader credentials
-              await this.ensureLeaderCredentialsWithTransaction(queryRunner, savedMember, email, password);
-
-              // Assign the role
-              group[roleField] = { id: savedMember.id } as Member;
-              await queryRunner.manager.save(Group, group);
-
-              console.log(`Assigned ${role} role to ${savedMember.fullNames} in group "${group.name}"`);
-
-              // Verify the assignment was successful
-              const updatedGroup = await queryRunner.manager.findOne(Group, {
-                where: { id: groupId },
-                relations: ["president", "accountant", "secretary"]
-              });
-              console.log(`Verification - ${role} assigned:`, updatedGroup[roleField]?.id === savedMember.id);
-            } catch (error) {
-              console.error(`Error assigning role ${roleAssignment.role}:`, error);
-            }
-          }
-        }
-
-        // Commit the transaction
-        await queryRunner.commitTransaction();
-
-        // Fetch the member with relations to return complete data
-        const memberWithRelations = await this.repository.findOne({
-          where: { id: savedMember.id },
-          relations: ["branch", "branch.district", "groupMemberships", "groupMemberships.group", "groupMemberships.branch"]
-        });
-
-        res.status(201).json({
-          status: "success",
-          data: await this.format(memberWithRelations),
-        });
-
-      } catch (error) {
-        await queryRunner.rollbackTransaction();
-        throw error;
-      } finally {
-        await queryRunner.release();
+      if (!district) {
+        return next(new NotFoundError("District not found"));
       }
+
+      // If branchId is provided, validate it belongs to the district
+      let branch: Branch | undefined;
+      if (branchId) {
+        branch = district.branches.find(b => b.id === branchId);
+        if (!branch) {
+          return next(new BadRequestError("Selected branch does not belong to the selected district"));
+        }
+      } else if (district.branches.length > 0) {
+        // If no branch specified, use the first branch in the district
+        branch = district.branches[0];
+      } else {
+        return next(new BadRequestError("No branches available in the selected district"));
+      }
+
+      const newMember = this.repository.create({
+        ...memberData,
+        branch: { id: branch.id }
+      });
+
+      // Save the member and handle the possibility of getting an array
+      const savedResult = await this.repository.save(newMember);
+
+      // Extract the saved member, handling both single object and array cases
+      const savedMember = Array.isArray(savedResult) ? savedResult[0] : savedResult;
+
+      if (!savedMember || !savedMember.id) {
+        return next(new BadRequestError("Failed to save member"));
+      }
+
+      if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
+        // Filter out any empty strings
+        const validGroupIds = groupIds.filter(id => id && id.trim() !== "");
+
+        // Create group memberships one by one to isolate any issues
+        for (const groupId of validGroupIds) {
+          try {
+            if (!groupId || isNaN(parseInt(groupId))) {
+              console.log(`Skipping invalid group ID: ${groupId}`);
+              continue;
+            }
+
+            const groupMembership = this.groupMemberRepository.create({
+              member: { id: savedMember.id },
+              group: { id: parseInt(groupId) },
+              branch: { id: branch.id }
+            });
+
+            await this.groupMemberRepository.save(groupMembership);
+          } catch (error) {
+            console.error(`Error creating group membership for group ${groupId}:`, error);
+          }
+        }
+      }
+
+      // Fetch the member with relations to return complete data
+      const memberWithRelations = await this.repository.findOne({
+        where: { id: savedMember.id },
+        relations: ["branch", "branch.district", "groupMemberships", "groupMemberships.group", "groupMemberships.branch"]
+      });
+
+      res.status(201).json({
+        status: "success",
+        data: await this.format(memberWithRelations),
+      });
     }
   );
 

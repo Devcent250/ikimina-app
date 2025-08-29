@@ -13,8 +13,6 @@ import { Group } from "../entities/Group";
 import { QueryParams } from "../types/QueryParams";
 import { Branch } from "../entities/Branch";
 import { LoanVerification } from "../entities/LoanVerification";
-import { Contribution } from "../entities/Contribution";
-import { LoanCategory } from "../entities/LoanCategory";
 
 export class LoanController {
   private repository: Repository<Loan> = AppDataSource.getRepository(Loan);
@@ -103,88 +101,6 @@ export class LoanController {
       // Check loan eligibility
       if (!groupMember.loanEligibility) {
         return next(new BadRequestError("Member is not eligible for loans"));
-      }
-
-      // Calculate member's total contributions (deposit + solidarity amounts)
-      const contributionRepository = AppDataSource.getRepository(Contribution);
-      const memberContributions = await contributionRepository
-        .createQueryBuilder("contribution")
-        .where("contribution.groupMember = :groupMemberId", { groupMemberId })
-        .andWhere("contribution.season = :seasonId", { seasonId })
-        .getMany();
-
-      // Calculate total contributions (current saving amount from latest contribution)
-      let totalContributions = 0;
-      if (memberContributions.length > 0) {
-        // Get the latest contribution to get the current total
-        const latestContribution = await contributionRepository
-          .createQueryBuilder("contribution")
-          .where("contribution.groupMember = :groupMemberId", { groupMemberId })
-          .andWhere("contribution.season = :seasonId", { seasonId })
-          .orderBy("contribution.createdAt", "DESC")
-          .getOne();
-
-        if (latestContribution) {
-          // Total contributions = current saving amount + current solidarity amount
-          totalContributions = latestContribution.currentSavingAmount + latestContribution.currentSolidalityAmount;
-        }
-      }
-
-      // Maximum loan amount = 3 times total contributions
-      const maxLoanAmount = totalContributions * 3;
-
-      // Get loan category limits if loanType is provided
-      let categoryMaxAmount = null;
-      let categoryMinAmount = null;
-      if (loanType) {
-        const loanCategory = await AppDataSource.getRepository(LoanCategory).findOne({
-          where: { name: loanType, isActive: true }
-        });
-
-        if (loanCategory) {
-          categoryMaxAmount = loanCategory.maxAmount;
-          categoryMinAmount = loanCategory.minAmount;
-        }
-      }
-
-      // Determine the effective maximum amount (most restrictive)
-      let effectiveMaxAmount = maxLoanAmount;
-      if (categoryMaxAmount && categoryMaxAmount > 0) {
-        effectiveMaxAmount = Math.min(maxLoanAmount, categoryMaxAmount);
-      }
-
-      // Check if requested amount exceeds effective maximum
-      if (amount > effectiveMaxAmount) {
-        let errorMessage = `Loan amount (${amount.toLocaleString()} FRW) exceeds maximum allowed amount (${effectiveMaxAmount.toLocaleString()} FRW).`;
-
-        if (categoryMaxAmount && categoryMaxAmount < maxLoanAmount) {
-          errorMessage += ` Limited by loan category maximum (${categoryMaxAmount.toLocaleString()} FRW).`;
-        } else {
-          errorMessage += ` Maximum loan is 3 times your total contributions (${totalContributions.toLocaleString()} FRW).`;
-        }
-
-        return next(new BadRequestError(errorMessage));
-      }
-
-      // Check if requested amount is below category minimum
-      if (categoryMinAmount && amount < categoryMinAmount) {
-        return next(new BadRequestError(
-          `Loan amount (${amount.toLocaleString()} FRW) is below minimum required for this loan category (${categoryMinAmount.toLocaleString()} FRW).`
-        ));
-      }
-
-      // Check for existing unpaid loans
-      const existingLoans = await this.repository
-        .createQueryBuilder("loan")
-        .leftJoin("loan.payments", "payment")
-        .where("loan.groupMember = :groupMemberId", { groupMemberId })
-        .andWhere("loan.season = :seasonId", { seasonId })
-        .groupBy("loan.id")
-        .having("loan.amount > COALESCE(SUM(payment.amount), 0)")
-        .getMany();
-
-      if (existingLoans.length > 0) {
-        return next(new BadRequestError("Member has existing unpaid loans. Please clear previous loans before applying for a new one."));
       }
 
       const season = await AppDataSource.getRepository(Season).findOne({
@@ -388,7 +304,7 @@ export class LoanController {
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       const user = req.user;
-
+      
       // Check user permissions and filter data accordingly
       if (user.isAdmin) {
         // Admin can see all loans - proceed with normal query
@@ -423,10 +339,10 @@ export class LoanController {
         // Group leaders can only see loans from their groups
         const { Group } = await import("../entities/Group");
         const groupRepository = AppDataSource.getRepository(Group);
-
+        
         // Find groups where the user is a leader
         let userGroups = [];
-
+        
         if (user.role?.name === "President") {
           const presidentGroups = await groupRepository.find({
             where: { president: { id: user.id } },
@@ -446,7 +362,7 @@ export class LoanController {
           });
           userGroups = secretaryGroups;
         }
-
+        
         if (userGroups.length === 0) {
           // User is a leader but has no groups, return empty result
           res.json({
@@ -460,9 +376,9 @@ export class LoanController {
           });
           return;
         }
-
+        
         const groupIds = userGroups.map(g => g.id);
-
+        
         // Get loans from user's groups
         const loans = await this.repository
           .createQueryBuilder("loan")
@@ -476,9 +392,9 @@ export class LoanController {
           .where("loan.group.id IN (:...groupIds)", { groupIds })
           .orderBy("loan.createdAt", "DESC")
           .getMany();
-
+        
         const formattedResults = loans.map(this.format);
-
+        
         res.json({
           results: formattedResults,
           pagination: {
@@ -502,9 +418,9 @@ export class LoanController {
           .where("loan.member.id = :memberId", { memberId: user.id })
           .orderBy("loan.createdAt", "DESC")
           .getMany();
-
+        
         const formattedResults = loans.map(this.format);
-
+        
         res.json({
           results: formattedResults,
           pagination: {
@@ -685,130 +601,6 @@ export class LoanController {
       res.status(200).json({
         status: "success",
         data: approvalStatus
-      });
-    }
-  );
-
-  // Get maximum loan amount for a member based on contributions
-  getMaxLoanAmount = asyncHandler(
-    async (req: Request, res: Response, next: NextFunction) => {
-      const { groupMemberId, seasonId } = req.params;
-      const { loanType } = req.query; // Optional loan type to check category limits
-
-      // Validate group member exists
-      const groupMember = await AppDataSource.getRepository(GroupMember).findOne({
-        where: { id: Number(groupMemberId) },
-        relations: ["member"]
-      });
-
-      if (!groupMember) {
-        return next(new NotFoundError("Group member not found"));
-      }
-
-      // Validate season exists
-      const season = await AppDataSource.getRepository(Season).findOne({
-        where: { id: Number(seasonId) }
-      });
-
-      if (!season) {
-        return next(new NotFoundError("Season not found"));
-      }
-
-      // Calculate member's total contributions
-      const contributionRepository = AppDataSource.getRepository(Contribution);
-
-      // Get the latest contribution to get current totals
-      const latestContribution = await contributionRepository
-        .createQueryBuilder("contribution")
-        .where("contribution.groupMember = :groupMemberId", { groupMemberId: Number(groupMemberId) })
-        .andWhere("contribution.season = :seasonId", { seasonId: Number(seasonId) })
-        .orderBy("contribution.createdAt", "DESC")
-        .getOne();
-
-      let totalContributions = 0;
-      if (latestContribution) {
-        // Total contributions = current saving amount + current solidarity amount
-        totalContributions = latestContribution.currentSavingAmount + latestContribution.currentSolidalityAmount;
-      }
-
-      // Maximum loan amount based on contributions = 3 times total contributions
-      const contributionBasedMaxAmount = totalContributions * 3;
-
-      // Get loan category limits if loanType is provided
-      let categoryMaxAmount = null;
-      let categoryMinAmount = null;
-      let categoryInfo = null;
-
-      if (loanType) {
-        const loanCategory = await AppDataSource.getRepository(LoanCategory).findOne({
-          where: { name: loanType as string, isActive: true }
-        });
-
-        if (loanCategory) {
-          categoryMaxAmount = loanCategory.maxAmount;
-          categoryMinAmount = loanCategory.minAmount;
-          categoryInfo = {
-            name: loanCategory.name,
-            maxAmount: categoryMaxAmount,
-            minAmount: categoryMinAmount,
-            defaultAmount: loanCategory.defaultAmount,
-            interestRate: loanCategory.interestRate
-          };
-        }
-      }
-
-      // Determine the effective maximum amount (most restrictive)
-      let effectiveMaxAmount = contributionBasedMaxAmount;
-      let limitedBy = "contributions";
-
-      if (categoryMaxAmount && categoryMaxAmount > 0 && categoryMaxAmount < contributionBasedMaxAmount) {
-        effectiveMaxAmount = categoryMaxAmount;
-        limitedBy = "category";
-      }
-
-      // Check for existing unpaid loans
-      const existingLoans = await this.repository
-        .createQueryBuilder("loan")
-        .leftJoin("loan.payments", "payment")
-        .where("loan.groupMember = :groupMemberId", { groupMemberId: Number(groupMemberId) })
-        .andWhere("loan.season = :seasonId", { seasonId: Number(seasonId) })
-        .groupBy("loan.id")
-        .having("loan.amount > COALESCE(SUM(payment.amount), 0)")
-        .getMany();
-
-      const hasUnpaidLoans = existingLoans.length > 0;
-
-      // Generate appropriate message
-      let message = "";
-      if (hasUnpaidLoans) {
-        message = "Member has existing unpaid loans";
-      } else if (totalContributions === 0) {
-        message = "Member has no contributions yet";
-      } else if (limitedBy === "category") {
-        message = `Member can borrow up to ${effectiveMaxAmount.toLocaleString()} FRW (limited by loan category: ${categoryInfo?.name})`;
-      } else {
-        message = `Member can borrow up to ${effectiveMaxAmount.toLocaleString()} FRW (3x contributions)`;
-      }
-
-      res.status(200).json({
-        status: "success",
-        data: {
-          groupMember: {
-            id: groupMember.id,
-            member: {
-              id: groupMember.member.id,
-              fullNames: groupMember.member.fullNames
-            }
-          },
-          totalContributions,
-          contributionBasedMaxAmount,
-          effectiveMaxAmount,
-          limitedBy,
-          categoryInfo,
-          hasUnpaidLoans,
-          loanEligible: groupMember.loanEligibility && !hasUnpaidLoans && totalContributions > 0,
-          message
-        }
       });
     }
   );
