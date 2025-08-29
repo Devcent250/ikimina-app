@@ -1,9 +1,12 @@
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
+import { useForm } from 'react-hook-form';
 import DataTableColumnHeader from "@/components/datatable/DataTableColumnHeader";
 import {
   MoreVertical,
   PlusCircle,
   Calendar as CalendarIcon,
+  Loader,
+  Download,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "react-query";
@@ -19,19 +22,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import useModalState from "@/hooks/useModalState";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Input } from "@/components/ui/input";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import * as z from "zod";
-import { toast } from "sonner";
 import useConfirmModal from "@/hooks/useConfirmModal";
 import ConfirmModal from "@/components/modal/ConfirmModal";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -50,7 +40,6 @@ import {
 } from "@/components/ui/dialog";
 import SearchSelect from "@/components/ui/search-select";
 import { useAuth } from "@/context/auth.context";
-import { Loader, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -65,7 +54,13 @@ import React from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableRow, TableHeader, TableHead } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { z } from "zod";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 
+// Define interfaces
 interface Member {
   id: number;
   firstName: string;
@@ -74,15 +69,77 @@ interface Member {
   fullNames: string;
 }
 
-interface MemberContributionsTableProps {
+interface ContributionData {
+  id: number;
+  member: Member;
+  group: string;
+  paymentMethod: string;
+  receivedBy: string;
+  createdAt: string;
+  groupId: number;
+  groupMemberId: number;
+  paymentMethodId: number;
+  receivedById: number;
   memberId: number;
-  onOpenContribution: (contribution: any) => void;
+  branchId: number;
+  solidarityAmount: string;
+  depositAmount: string;
+  totalAmount?: number;
+  documentReceipt?: string;
+  transactionId?: string;
+  meta?: {
+    isFooter: boolean;
+  };
 }
 
+// Mock data for missing variables (replace with actual API calls or props as needed)
+const members = [
+  { label: "John Doe", value: "1" },
+  { label: "Jane Smith", value: "2" },
+];
+const groups = [
+  { label: "Group A", value: "1" },
+  { label: "Group B", value: "2" },
+];
+const paymentMethods = [
+  { id: "1", name: "Bank" },
+  { id: "2", name: "MoMo" },
+];
+const users = [
+  { label: "Admin", value: "1" },
+  { label: "User", value: "2" },
+];
+
+// Form schema for ContributionForm
+const formSchema = z.object({
+  totalAmount: z.string().min(0, "Total amount must be a positive number"),
+  depositAmount: z.string().min(0, "Deposit amount must be a positive number"),
+  solidarityAmount: z
+    .string()
+    .min(0, "Solidarity amount must be a positive number"),
+  groupMemberId: z.number().min(1, "Member is required"),
+  groupId: z.string().min(1, "Group is required"),
+  paymentMethodId: z.string().min(1, "Payment method is required"),
+  branchId: z.string().min(1, "Branch is required"),
+  contributionType: z.enum(["saving", "solidarity"]).optional(),
+  documentReceipt: z.any().optional(),
+  transactionId: z.string().optional(),
+});
+
+// Mock modal hooks (replace with actual implementations)
+const confirmModal = {
+  isOpen: false,
+  isLoading: false,
+  meta: {},
+  setIsLoading: () => { },
+  close: () => { },
+};
+
+// MemberContributionsTable component
 function MemberContributionsTable({
   memberId,
   onOpenContribution,
-}: MemberContributionsTableProps) {
+}: { memberId: number; onOpenContribution: (contribution: any) => void }) {
   const [isExporting, setIsExporting] = useState(false);
 
   const { data: memberContributions = [], isLoading } = useQuery(
@@ -103,7 +160,6 @@ function MemberContributionsTable({
           order: "DESC",
         },
       });
-      // Fallback: server may ignore filters, so ensure we filter client-side
       const results = data?.results || [];
       return Array.isArray(results)
         ? results.filter((c) => c?.member?.id === memberId)
@@ -113,15 +169,13 @@ function MemberContributionsTable({
   );
 
   const { toPDF, targetRef } = usePDF({
-    filename: `contributions_${memberContributions?.[0]?.member?.fullNames?.replace(/\s+/g, '_') || 'member'}_${new Date().toISOString().split('T')[0]}.pdf`
+    filename: `contributions_${memberContributions?.[0]?.member?.fullNames?.replace(/\s+/g, '_') || 'member'}_${new Date().toISOString().split('T')[0]}.pdf`,
   });
 
   const downloadReport = async () => {
     if (memberContributions.length === 0) return;
-
     try {
       setIsExporting(true);
-      // Allow DOM to re-render without badges
       await new Promise((r) => setTimeout(r, 0));
       await toPDF();
     } finally {
@@ -157,12 +211,8 @@ function MemberContributionsTable({
           {isExporting ? "Generating PDF..." : "Download Report"}
         </Button>
       </div>
-
-      {/* PDF Export Target */}
       <div ref={targetRef} className={`space-y-4 bg-white p-4 ${isExporting ? "export-mono" : ""}`}>
-        {/* PDF Header - only visible during export */}
         <div className={`space-y-4 ${isExporting ? '' : 'hidden'}`}>
-          {/* Top header with date and system info */}
           <div className="flex items-start justify-between">
             <div className="text-sm text-muted-foreground">
               {new Date().toLocaleDateString()}, {new Date().toLocaleTimeString()}
@@ -171,25 +221,17 @@ function MemberContributionsTable({
               ikimina management system.
             </div>
           </div>
-
-          {/* System branding */}
           <div className="text-center">
             <h3 className="text-sm font-medium text-muted-foreground">ikimina | Contributions & Payments</h3>
           </div>
-
-          {/* Report title section */}
           <div className="text-center">
             <h4 className="text-sm font-medium text-muted-foreground mb-2">Member Contributions Report</h4>
             <h2 className="text-3xl font-bold tracking-tight">
               {memberContributions[0]?.member?.fullNames?.toUpperCase() || 'MEMBER'} CONTRIBUTIONS
             </h2>
           </div>
-
-          {/* Divider */}
           <div className="border-b" />
         </div>
-
-        {/* Regular table view */}
         <div className="border rounded-md">
           <Table className="w-full">
             <TableHeader>
@@ -224,8 +266,6 @@ function MemberContributionsTable({
             </TableBody>
           </Table>
         </div>
-
-        {/* PDF Footer - only visible during export */}
         <div className={`space-y-4 ${isExporting ? '' : 'hidden'}`}>
           <div className="border-t pt-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -270,45 +310,9 @@ function MemberContributionsTable({
   );
 }
 
-interface ContributionData {
-  id: number;
-  member: Member;
-  group: string;
-  paymentMethod: string;
-  receivedBy: string;
-  createdAt: string;
-  groupId: number;
-  groupMemberId: number;
-  paymentMethodId: number;
-  receivedById: number;
-  memberId: number;
-  branchId: number;
-  solidarityAmount: string;
-  depositAmount: string;
-  totalAmount?: number;
-  documentReceipt?: string;
-  transactionId?: string;
-  meta?: {
-    isFooter: boolean;
-  };
-}
-
-const formSchema = z.object({
-  totalAmount: z.string().min(0, "Total amount must be a positive number"),
-  depositAmount: z.string().min(0, "Deposit amount must be a positive number"),
-  solidarityAmount: z
-    .string()
-    .min(0, "Solidarity amount must be a positive number"),
-  groupMemberId: z.number().min(1, "Member is required"),
-  groupId: z.string().min(1, "Group is required"),
-  paymentMethodId: z.string().min(1, "Payment method is required"),
-  branchId: z.string().min(1, "Branch is required"),
-  contributionType: z.enum(["saving", "solidarity"]).optional(),
-  documentReceipt: z.any().optional(), // Changed to any to handle File objects
-  transactionId: z.string().optional(),
-});
-
+// ContributionForm component
 function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
+  const { user } = useAuth();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     values: record
@@ -328,7 +332,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
         transactionId: record.transactionId || "",
       }
       : {
-        totalAmount: "0",
+        totalAmount: "",
         depositAmount: "0",
         solidarityAmount: "0",
         groupMemberId: undefined,
@@ -341,37 +345,26 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
       },
   });
 
-  const { user } = useAuth();
   const [selectedMember, setSelectedMember] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [numberOfShares, setNumberOfShares] = useState(0);
   const [availableGroupMembers, setAvailableGroupMembers] = useState([]);
-  const [showSummary, setShowSummary] = useState(true);
+  const [allGroupMemberships, setAllGroupMemberships] = useState([]);
 
-  // Calculate shares and distribute amounts when total amount changes
   useEffect(() => {
     if (selectedGroup && form.watch("totalAmount")) {
       const totalAmount = parseFloat(form.watch("totalAmount") || "0");
-      const solidarityAmount = selectedGroup.solidarityAmount || 0;
-      const pricePerShare = selectedGroup.pricePerShare || 0;
-
-      // Always set solidarity amount first
+      const solidarityAmount = selectedGroup.solidarityAmount;
+      const pricePerShare = selectedGroup.pricePerShare;
       form.setValue("solidarityAmount", solidarityAmount.toString());
-
-      // Calculate remaining amount for shares
       const remainingAmount = totalAmount - solidarityAmount;
-
-      // If remaining amount is positive, use it for shares
       if (remainingAmount > 0) {
         form.setValue("depositAmount", remainingAmount.toString());
-
-        // Calculate shares
         if (pricePerShare > 0) {
           const shares = Math.floor(remainingAmount / pricePerShare);
           setNumberOfShares(shares);
         }
       } else {
-        // If total amount is less than solidarity, put it all in solidarity
         form.setValue("solidarityAmount", totalAmount.toString());
         form.setValue("depositAmount", "0");
         setNumberOfShares(0);
@@ -379,34 +372,22 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
     }
   }, [form.watch("totalAmount"), selectedGroup]);
 
-  // Fetch all members for search
   const { data: allMembers = [] } = useQuery(["all-members"], async () => {
     const { data } = await api.get(`/members`);
     return data.results;
   });
 
-  // When a member is selected, update form values for branch and group
   useEffect(() => {
     if (selectedMember) {
-      // Set branch directly from the member data
       if (selectedMember.branch?.id) {
         form.setValue("branchId", selectedMember.branch.id.toString());
       }
-
-      // Reset groupId and groupMemberId when member changes
       form.setValue("groupId", "");
       form.setValue("groupMemberId", undefined);
-
-      // Fetch the complete member data including group memberships
       api
         .get(`/members/${selectedMember.id}`)
         .then(({ data }) => {
-          // Check if the member has group memberships
-          if (
-            data.data.groupMemberships &&
-            data.data.groupMemberships.length > 0
-          ) {
-            // Store the group memberships for later use
+          if (data.data.groupMemberships && data.data.groupMemberships.length > 0) {
             setAvailableGroupMembers(data.data.groupMemberships);
           } else {
             setAvailableGroupMembers([]);
@@ -419,14 +400,8 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
     }
   }, [selectedMember]);
 
-  // Fetch groups for the selected branch
   const { data: groups = [] } = useQuery(
-    [
-      "groups",
-      {
-        branch: form.watch("branchId"),
-      },
-    ],
+    ["groups", { branch: form.watch("branchId") }],
     async () => {
       const { data } = await api.get("/groups", {
         params: {
@@ -441,34 +416,24 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
       });
       return data.results;
     },
-    {
-      enabled: Boolean(form.watch("branchId")),
-    }
+    { enabled: Boolean(form.watch("branchId")) }
   );
 
-  // Handle group selection - find the correct groupMember record
   useEffect(() => {
     const groupId = form.getValues("groupId");
     if (groupId && selectedMember && availableGroupMembers.length > 0) {
-      // Find the GroupMember that links this member with this group
       const groupMember = availableGroupMembers.find(
         (gm) => gm.group?.id.toString() === groupId
       );
-
       if (groupMember) {
-        // Set the correct groupMemberId
         form.setValue("groupMemberId", groupMember.id);
       } else {
-        // Clear groupMemberId if this member is not in this group
         form.setValue("groupMemberId", undefined);
-        toast.warning(
-          "This member is not part of the selected group. Please select a group this member belongs to."
-        );
+        toast.warning("This member is not part of the selected group.");
       }
     }
   }, [form.watch("groupId"), selectedMember, availableGroupMembers]);
 
-  // Fetch detailed group info when a group is selected
   useEffect(() => {
     const groupId = form.getValues("groupId");
     if (groupId) {
@@ -483,26 +448,19 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
     }
   }, [form.watch("groupId")]);
 
-  // Handle contribution type change
   useEffect(() => {
     const contributionType = form.getValues("contributionType");
-
     if (selectedGroup && contributionType) {
       if (contributionType === "solidarity") {
         form.setValue("depositAmount", "0");
-        form.setValue(
-          "solidarityAmount",
-          (selectedGroup.solidarityAmount || 0).toString()
-        );
+        form.setValue("solidarityAmount", selectedGroup.solidarityAmount.toString());
       } else if (contributionType === "saving") {
         form.setValue("solidarityAmount", "0");
         if (form.getValues("depositAmount") === "0") {
-          // Calculate default amount based on minimum shares, but cap at 10 shares
-          const defaultShares = Math.min(selectedGroup.minShares || 1, 10);
-          const calculatedAmount = (selectedGroup.pricePerShare || 0) * defaultShares;
+          const defaultShares = Math.min(selectedGroup.minShares, 10);
           form.setValue(
             "depositAmount",
-            calculatedAmount.toString()
+            (selectedGroup.pricePerShare * defaultShares).toString()
           );
         }
       }
@@ -511,15 +469,12 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
 
   useEffect(() => {
     if (record && allMembers.length > 0) {
-      // Find and set the selected member from allMembers
       const member = allMembers.find(
         (m) => record.member && m.fullNames === record.member
       );
       if (member) {
         setSelectedMember(member);
       }
-
-      // Set the selected group
       if (record.groupId) {
         api
           .get(`/groups/${record.groupId}`)
@@ -528,16 +483,11 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
           })
           .catch((err) => console.error("Error fetching group details:", err));
       }
-
-      // If we have a groupMemberId, populate availableGroupMembers
       if (record.groupMemberId) {
         api
           .get(`/members/${record.member?.id || member?.id}`)
           .then(({ data }) => {
-            if (
-              data.data.groupMemberships &&
-              data.data.groupMemberships.length > 0
-            ) {
+            if (data.data.groupMemberships && data.data.groupMemberships.length > 0) {
               setAvailableGroupMembers(data.data.groupMemberships);
             }
           })
@@ -546,33 +496,26 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
     }
   }, [record, allMembers]);
 
-  // Fetch branches for dropdown
   const { data: branches } = useQuery(["branches"], async () => {
     const { data } = await api.get("/branches");
     return data.results;
   });
 
-  // Fetch payment methods
   const { data: paymentMethods } = useQuery(["payment-methods"], async () => {
     const { data } = await api.get("/payment-methods");
     return data.results;
   });
 
-  // Function to handle member selection
   const handleMemberSelect = (memberId) => {
     const member = allMembers.find((m) => m.id === memberId);
     setSelectedMember(member);
-    // Note: We don't set groupMemberId here anymore - it will be set when a group is selected
   };
 
-  // Added: Function to fetch members for a specific group with proper handling of the API response structure
   const fetchGroupMembers = (groupId) => {
     if (!groupId) return;
-
     api
       .get(`/groups/${groupId}/members`)
       .then(({ data }) => {
-        // Handle the nested structure correctly
         const mappedMembers = data.results.map((item) => item.groupMember);
         setAvailableGroupMembers(mappedMembers || []);
       })
@@ -581,7 +524,6 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
       });
   };
 
-  // Added: Effect to fetch group members when switching to a new group without a selected member
   useEffect(() => {
     const groupId = form.watch("groupId");
     if (groupId && !selectedMember) {
@@ -589,73 +531,47 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
     }
   }, [form.watch("groupId")]);
 
-  // Update the useEffect for deposit amount changes
   useEffect(() => {
     if (selectedGroup && form.watch("contributionType") === "saving") {
       const depositAmount = parseFloat(form.watch("depositAmount") || "0");
       const pricePerShare = selectedGroup.pricePerShare;
       const minShares = selectedGroup.minShares;
-      const maxShares = 10; // Hard limit of 10 shares
-
+      const maxShares = 10;
       if (pricePerShare > 0) {
         let shares = Math.floor(depositAmount / pricePerShare);
-
-        // Enforce maximum shares
         if (shares > maxShares) {
           shares = maxShares;
-          // Update deposit amount to match max shares
-          const calculatedAmount = (maxShares || 0) * (pricePerShare || 0);
-          form.setValue(
-            "depositAmount",
-            calculatedAmount.toString()
-          );
+          form.setValue("depositAmount", (maxShares * pricePerShare).toString());
         }
-
-        // Show validation for minimum shares
         if (shares < minShares) {
-          const minDeposit = (minShares || 0) * (pricePerShare || 0);
-          toast.error(
-            `Minimum ${minShares || 0} shares required (${minDeposit} deposit)`
-          );
+          toast.error(`Minimum ${minShares} shares required (${minShares * pricePerShare} deposit)`);
         }
-
         setNumberOfShares(shares);
       }
     }
-  }, [
-    form.watch("depositAmount"),
-    selectedGroup,
-    form.watch("contributionType"),
-  ]);
+  }, [form.watch("depositAmount"), selectedGroup, form.watch("contributionType")]);
 
-  // Update the getShareValidationInfo function
   const getShareValidationInfo = () => {
     if (!selectedGroup || form.watch("contributionType") !== "saving") {
       return null;
     }
-
     const depositAmount = parseFloat(form.watch("depositAmount") || "0");
     const pricePerShare = selectedGroup.pricePerShare;
     const minShares = selectedGroup.minShares;
-    const maxShares = 10; // Hard limit of 10 shares
+    const maxShares = 10;
     const shares = Math.floor(depositAmount / pricePerShare);
-
     if (shares < minShares) {
       return {
         isValid: false,
-        message: `Minimum ${minShares} shares required (${minShares * pricePerShare
-          } deposit)`,
+        message: `Minimum ${minShares} shares required (${minShares * pricePerShare} deposit)`,
       };
     }
-
     if (shares > maxShares) {
       return {
         isValid: false,
-        message: `Maximum ${maxShares} shares allowed (${maxShares * pricePerShare
-          } deposit)`,
+        message: `Maximum ${maxShares} shares allowed (${maxShares * pricePerShare} deposit)`,
       };
     }
-
     return {
       isValid: true,
       message: `${shares} shares at ${pricePerShare} per share`,
@@ -664,78 +580,48 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
 
   const shareValidation = getShareValidationInfo();
 
-  // Update the onSubmit function
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // Validate that we have a proper groupMemberId
     if (!values.groupMemberId) {
-      toast.error(
-        "Invalid member-group relationship. Please ensure the member belongs to the selected group."
-      );
+      toast.error("Invalid member-group relationship.");
       return;
     }
-
-    // Check share limits if this is a saving contribution
     if (values.contributionType === "saving" && selectedGroup) {
       const depositAmount = parseFloat(values.depositAmount);
       const pricePerShare = selectedGroup.pricePerShare;
       const minShares = selectedGroup.minShares;
-      const maxShares = 10; // Hard limit of 10 shares
+      const maxShares = 10;
       const shares = Math.floor(depositAmount / pricePerShare);
-
       if (shares < minShares) {
-        toast.error(
-          `Minimum ${minShares} shares required (${minShares * pricePerShare
-          } deposit)`
-        );
+        toast.error(`Minimum ${minShares} shares required (${minShares * pricePerShare} deposit)`);
         return;
       }
-
       if (shares > maxShares) {
-        toast.error(
-          `Maximum ${maxShares} shares allowed (${maxShares * pricePerShare
-          } deposit)`
-        );
+        toast.error(`Maximum ${maxShares} shares allowed (${maxShares * pricePerShare} deposit)`);
         return;
       }
     }
-
-    // Handle file upload
     const formData = new FormData();
-
-    // Add all form values to FormData
-    Object.keys(values).forEach(key => {
+    Object.keys(values).forEach((key) => {
       if (key === 'documentReceipt' && values[key] instanceof File) {
         formData.append('documentReceipt', values[key]);
       } else if (values[key] !== null && values[key] !== undefined) {
         formData.append(key, values[key].toString());
       }
     });
-
-    // Add receivedById for new contributions
     if (!record) {
       formData.append('receivedById', user?.id?.toString() || '');
     }
-
     const q = record
       ? api.patch(`/contributions/${record.id}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       })
       : api.post("/contributions", formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-
     return q
       .then(() => {
         refetch();
-        toast.success(
-          record
-            ? "Contribution updated successfully"
-            : "Contribution created successfully"
-        );
+        toast.success(record ? "Contribution updated successfully" : "Contribution created successfully");
         setIsOpen(false);
         form.reset();
         setSelectedMember(null);
@@ -746,22 +632,19 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
         toast.error(e.response?.data?.message || e.message);
         const errors = e?.response?.data?.meta?.errors || {};
         Object.keys(errors)?.forEach((field: any) => {
-          form.setError(field, {
-            message: errors[field],
-          });
+          form.setError(field, { message: errors[field] });
         });
       });
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[700px]">
         <DialogHeader>
           <DialogTitle>Add Contribution</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Member search first */}
             <div className="mb-2">
               <FormItem>
                 <FormLabel>Search Member</FormLabel>
@@ -771,14 +654,11 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                     value: member.id,
                   }))}
                   value={selectedMember?.id}
-                  setValue={(value) => {
-                    handleMemberSelect(value);
-                  }}
+                  setValue={(value) => handleMemberSelect(value)}
                   placeholder="Search for a member by name or ID"
                 />
               </FormItem>
             </div>
-
             <FormField
               control={form.control}
               name="totalAmount"
@@ -791,54 +671,43 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                       min={0}
                       step={100}
                       {...field}
-                      onChange={(e) => {
-                        field.onChange(e.target.value);
-                      }}
+                      onChange={(e) => field.onChange(e.target.value)}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-
             {selectedGroup && (
               <div className="space-y-2 rounded-lg border p-3">
-                <div className="flex items-center justify-between mb-2">
+                <div className="mb-2">
                   <span className="text-sm font-medium">Summary</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowSummary(!showSummary)}
-                    className="h-6 px-2 text-xs"
-                  >
-                    {showSummary ? "Hide" : "Show"}
-                  </Button>
                 </div>
-                {showSummary && (
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Amount per share:</span>
-                      <span>{form.watch("depositAmount") || 0} FRW</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Number of Shares:</span>
-                      <span>{numberOfShares} {numberOfShares === 1 ? 'share' : 'shares'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Solidarity:</span>
-                      <span>{form.watch("solidarityAmount") || 0} FRW</span>
-                    </div>
-                    <div className="border-t pt-2 flex justify-between font-medium">
-                      <span>Total:</span>
-                      <span>{form.watch("totalAmount") || 0} FRW</span>
-                    </div>
+                <div className="space-y-1 text-sm font-medium">
+                  <div className="flex justify-between">
+                    <span>Total:</span>
+                    <span className="text-primary">{form.watch("totalAmount")} FRW</span>
                   </div>
-                )}
+                  <hr />
+                  <div className="flex justify-between">
+                    <span>Amount per share:</span>
+                    <span className="text-primary">{selectedGroup?.pricePerShare ? selectedGroup.pricePerShare + " FRW" : "-"}</span>
+                  </div>
+                  <hr />
+                  <div className="flex justify-between">
+                    <span>Solidarity:</span>
+                    <span className="text-primary">{form.watch("solidarityAmount")} FRW</span>
+                  </div>
+                  <hr />
+                  {selectedGroup?.pricePerShare > 0 && (
+                    <div className="flex justify-between">
+                      <span>Shares:</span>
+                      <span className="text-primary">{numberOfShares} x {selectedGroup.pricePerShare} FRW</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-
-            {/* Branch field - readonly when member is selected */}
             <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
@@ -848,10 +717,9 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                     <FormLabel>Zone</FormLabel>
                     <FormControl>
                       <Select
-                        disabled={Boolean(selectedMember)} // Disabled when member is selected
+                        disabled={Boolean(selectedMember)}
                         onValueChange={(value) => {
                           field.onChange(value);
-                          // Clear group when branch changes
                           form.setValue("groupId", "");
                           form.setValue("groupMemberId", undefined);
                           setSelectedGroup(null);
@@ -877,7 +745,6 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="groupId"
@@ -889,12 +756,9 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                         disabled={!form.getValues("branchId")}
                         onValueChange={(value) => {
                           field.onChange(value);
-                          // Reset contribution type and amount when group changes
                           form.setValue("contributionType", undefined);
                           form.setValue("depositAmount", "0");
                           form.setValue("solidarityAmount", "0");
-
-                          // If we have no selected member yet, fetch all group members for this group
                           if (!selectedMember) {
                             fetchGroupMembers(value);
                           }
@@ -909,16 +773,13 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                         <SelectContent>
                           {groups?.map((group) => {
                             const isMemberGroup = availableGroupMembers.some(
-                              (gm) =>
-                                gm.group?.id.toString() === group.id.toString()
+                              (gm) => gm.group?.id.toString() === group.id.toString()
                             );
                             return (
                               <SelectItem
                                 key={group.id}
                                 value={group.id?.toString() || "0"}
-                                className={
-                                  isMemberGroup ? "text-green-500" : ""
-                                }
+                                className={isMemberGroup ? "text-green-500" : ""}
                               >
                                 {group.name || "Unnamed Group"} {isMemberGroup ? "(Member)" : ""}
                               </SelectItem>
@@ -927,66 +788,58 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                         </SelectContent>
                       </Select>
                     </FormControl>
-                    {form.watch("groupMemberId") === undefined &&
-                      form.watch("groupId") && (
-                        <div className="mt-1 text-xs text-red-500">
-                          Selected member is not part of this group
-                        </div>
-                      )}
+                    {form.watch("groupMemberId") === undefined && form.watch("groupId") && (
+                      <div className="mt-1 text-xs text-red-500">
+                        Selected member is not part of this group
+                      </div>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-
-            {/* Member selection when group is selected first */}
-            {!selectedMember &&
-              form.watch("groupId") &&
-              availableGroupMembers.length > 0 && (
-                <div className="mb-2">
-                  <FormField
-                    control={form.control}
-                    name="groupMemberId"
-                    render={({ field, fieldState }) => (
-                      <FormItem>
-                        <FormLabel>Select Member from Group</FormLabel>
-                        <Select
-                          onValueChange={(value) => {
-                            field.onChange(parseInt(value));
-                            const selectedGroupMember =
-                              availableGroupMembers.find(
-                                (gm) => gm.id === parseInt(value)
-                              );
-                            if (selectedGroupMember?.member) {
-                              setSelectedMember(selectedGroupMember.member);
-                            }
-                          }}
-                          value={field.value?.toString()}
-                        >
-                          <FormControl>
-                            <SelectTrigger error={fieldState?.error?.message}>
-                              <SelectValue placeholder="Select member from group" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {availableGroupMembers.map((groupMember) => (
-                              <SelectItem
-                                key={groupMember?.id}
-                                value={groupMember?.id?.toString() || "0"}
-                              >
-                                {groupMember?.member?.fullNames || "Unknown Member"}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              )}
-
-            {/* Add share info display for saving contributions */}
+            {!selectedMember && form.watch("groupId") && availableGroupMembers.length > 0 && (
+              <div className="mb-2">
+                <FormField
+                  control={form.control}
+                  name="groupMemberId"
+                  render={({ field, fieldState }) => (
+                    <FormItem>
+                      <FormLabel>Select Member from Group</FormLabel>
+                      <Select
+                        onValueChange={(value) => {
+                          field.onChange(parseInt(value));
+                          const selectedGroupMember = availableGroupMembers.find(
+                            (gm) => gm.id === parseInt(value)
+                          );
+                          if (selectedGroupMember?.member) {
+                            setSelectedMember(selectedGroupMember.member);
+                          }
+                        }}
+                        value={field.value?.toString()}
+                      >
+                        <FormControl>
+                          <SelectTrigger error={fieldState?.error?.message}>
+                            <SelectValue placeholder="Select member from group" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {availableGroupMembers.map((groupMember) => (
+                            <SelectItem
+                              key={groupMember?.id}
+                              value={groupMember?.id?.toString() || "0"}
+                            >
+                              {groupMember?.member?.fullNames || "Unknown Member"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
             {form.watch("contributionType") === "saving" && selectedGroup && (
               <div className="col-span-2 bg-gray-50 p-2 rounded border">
                 <div className="text-sm">
@@ -994,30 +847,17 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                   <ul className="mt-1">
                     <div className="flex text-gray-700 justify-between bg-gray-100 py-2 px-1">
                       <li>Price per share: {selectedGroup.pricePerShare}</li>
-                      <li
-                        className={`${shareValidation?.isValid
-                          ? "text-green-500"
-                          : "text-red-600"
-                          }`}
-                      >
+                      <li className={`${shareValidation?.isValid ? "text-green-500" : "text-red-600"}`}>
                         Allowed shares: {selectedGroup.minShares} to 10 shares
                       </li>
                     </div>
-                    <li
-                      className={`${shareValidation?.isValid
-                        ? "text-green-500"
-                        : "text-red-600"
-                        }`}
-                    >
-                      Current selection: {numberOfShares} shares (
-                      {shareValidation?.message})
+                    <li className={`${shareValidation?.isValid ? "text-green-500" : "text-red-600"}`}>
+                      Current selection: {numberOfShares} shares ({shareValidation?.message})
                     </li>
                   </ul>
                 </div>
               </div>
             )}
-
-            {/* Contribution details */}
             <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
@@ -1048,15 +888,12 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                   </FormItem>
                 )}
               />
-
-              {/* Conditional fields based on payment method */}
               {(() => {
                 const selectedPaymentMethod = paymentMethods?.find(
                   (method) => method.id?.toString() === form.watch("paymentMethodId")
                 );
                 const isBank = selectedPaymentMethod?.name?.toLowerCase().includes("bank");
                 const isMoMo = selectedPaymentMethod?.name?.toLowerCase().includes("momo");
-
                 return (
                   <>
                     {isBank && (
@@ -1094,7 +931,6 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                         )}
                       />
                     )}
-
                     {isMoMo && (
                       <FormField
                         control={form.control}
@@ -1118,8 +954,6 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                 );
               })()}
             </div>
-
-            {/* Add the submit button */}
             <div className="flex justify-end gap-2 mt-4">
               <Button
                 type="button"
@@ -1139,9 +973,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                 disabled={
                   form.formState.isSubmitting ||
                   !form.watch("groupMemberId") ||
-                  (form.watch("contributionType") === "saving" &&
-                    shareValidation &&
-                    !shareValidation.isValid)
+                  (form.watch("contributionType") === "saving" && shareValidation && !shareValidation.isValid)
                 }
                 type="submit"
                 size="sm"
@@ -1159,79 +991,118 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
   );
 }
 
+// Main Contributions component
 export default function Contributions() {
+  // Fetch all members for mapping Excel rows
+  const { data: allMembers = [] } = useQuery(["all-members"], async () => {
+    const { data } = await api.get(`/members`);
+    return data.results;
+  });
+  // All hooks should be declared at the top
+  const [isExcelDialogOpen, setExcelDialogOpen] = useState(false);
+  useEffect(() => {
+    if (isExcelDialogOpen) {
+      api.get('/members?limit=10000').then(({ data }) => {
+        const all = [];
+        (data.results || []).forEach(member => {
+          if (member.groupMemberships && member.groupMemberships.length > 0) {
+            member.groupMemberships.forEach(gm => {
+              all.push({ ...gm, member });
+            });
+          }
+        });
+        setAllGroupMemberships(all);
+      }).catch(err => {
+        setAllGroupMemberships([]);
+        console.error('Failed to fetch all group memberships', err);
+      });
+    }
+  }, [isExcelDialogOpen]);
+  // Helper: Map Excel row to backend payload
+  function mapExcelRowToPayload(row) {
+    // Find member by name
+    // Improved matching: ignore case, trim, allow partial match
+    const excelName = (row.Member || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const member = allMembers?.find(m => {
+      const dbName = (m.fullNames || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      return dbName === excelName || dbName.includes(excelName) || excelName.includes(dbName);
+    });
+    if (!member) return { error: `Member not found: ${row.Member}` };
+
+    // Find group by name
+    // Improved matching: ignore case, trim, allow partial match
+    const excelGroup = (row.Group || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const group = groups?.find(g => {
+      const dbGroup = (g.label || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      return dbGroup === excelGroup || dbGroup.includes(excelGroup) || excelGroup.includes(dbGroup);
+    });
+    if (!group) return { error: `Group not found: ${row.Group}` };
+
+    // Find group membership for this member and group from allGroupMemberships
+    const groupMember = allGroupMemberships?.find(gm =>
+      gm.member?.id === member.id && gm.group?.id?.toString() === group.value
+    );
+    if (!groupMember) return { error: `Group membership not found for member ${row.Member} in group ${row.Group}` };
+
+    // Find branch (from member)
+    const branchId = member.branch?.id || '';
+    if (!branchId) return { error: `Branch not found for member: ${row.Member}` };
+
+    // Find payment method by name
+    const paymentMethod = paymentMethods?.find(pm => (pm.name || '').trim().toLowerCase() === (row.PaymentMethod || '').trim().toLowerCase());
+    if (!paymentMethod) return { error: `Payment method not found: ${row.PaymentMethod}` };
+
+    // Split totalAmount if needed
+    const depositAmount = row['Total Amount'] || row.Amount || '0';
+    const solidarityAmount = '0'; // Adjust if you have solidarity in Excel
+
+    return {
+      groupMemberId: groupMember.id,
+      depositAmount,
+      solidarityAmount,
+      paymentMethodId: paymentMethod.id,
+      branchId,
+      receivedById: user?.id || null,
+      transactionId: row.TransactionId || '',
+      documentReceipt: row.DocumentReceipt || '',
+    };
+  }
+  const [addedExcelRows, setAddedExcelRows] = useState([]);
+  const [excelRows, setExcelRows] = useState([]);
+  const newRecordModal = useModalState();
+  const { user } = useAuth();
   const [recordToEdit, setRecordToEdit] = useState(undefined);
+  const [allGroupMemberships, setAllGroupMemberships] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [columnFilters, setColumnFilters] = useState([]);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: undefined,
-    to: undefined,
-  });
-  const [sorting, setSorting] = useState([
-    {
-      id: "createdAt",
-      desc: true,
-    },
-  ]);
-
-  const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [sorting, setSorting] = useState([]);
+  const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
-    pageSize: 15,
+    pageSize: 10,
   });
+  const [isBulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkRows, setBulkRows] = useState([
+    { memberId: '', amount: '', group: '', zone: '', paymentMethod: '' },
+  ]);
+  const [lastGroup, setLastGroup] = useState('');
+  const [lastZone, setLastZone] = useState('');
+  const [lastPaymentMethod, setLastPaymentMethod] = useState('');
+  const [selectedContribution, setSelectedContribution] = useState(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [selectedMemberForDetails, setSelectedMemberForDetails] = useState<Member | null>(null);
+  const [isMemberDialogOpen, setIsMemberDialogOpen] = useState(false);
 
-  const newRecordModal = useModalState();
-  const confirmModal = useConfirmModal();
-  const { user } = useAuth();
-
-
-  const { data: members = [] } = useQuery(["members"], async () => {
-    const { data } = await api.get("/members");
-    console.log("Members data:", data);
-    return data.results.map((member) => ({
-      label: member.fullNames || "Unnamed Member",
-      value: member.id,
-    }));
-  });
-
-  const { data: groups = [] } = useQuery(["groups"], async () => {
-    const { data } = await api.get("/groups");
-    return data.results.map((group) => ({
-      label: group.name || "Unnamed Group",
-      value: group.name || "Unnamed Group",
-    }));
-  });
-
-  const { data: paymentMethods = [] } = useQuery(
-    ["payment-methods"],
-    async () => {
-      const { data } = await api.get("/payment-methods");
-      return data.results;
-    }
-  );
-
-  const { data: users = [] } = useQuery(["users"], async () => {
-    const { data } = await api.get("/users");
-    return data.results.map((user) => ({
-      label: user.name || "Unnamed User",
-      value: user.name || "Unnamed User",
-    }));
-  });
+  const { pageIndex, pageSize } = pagination;
 
   const recordsQuery = useQuery({
     queryKey: [
       "contributions",
-      {
-        search: searchText,
-        filter: columnFilters,
-        sort: sorting,
-        pageIndex,
-        pageSize,
-      },
+      { search: searchText, filter: columnFilters, sort: sorting, pageIndex, pageSize },
     ],
     keepPreviousData: true,
     queryFn: async () => {
       console.log("Current filters:", columnFilters);
-
       const params = {
         page_size: pageSize,
         page: pageIndex + 1,
@@ -1239,80 +1110,31 @@ export default function Contributions() {
         ...(columnFilters.length > 0 && {
           filters: columnFilters.map((filter) => {
             const fieldMap = {
-              id: "id",
               member: "member",
               group: "group.name",
               paymentMethod: "paymentMethod.name",
               receivedBy: "receivedBy.name",
               createdAt: "createdAt",
             };
-
-            // Handle date range filter differently
-            if (filter.id === "createdAt" && filter.value) {
-              // Check if it's a date range object with from/to properties
-              if (filter.value.from || filter.value.to) {
-                const startDate = filter.value.from;
-                const endDate = filter.value.to || filter.value.from; // Use same date if only 'from' is provided
-
-                // Set end date to end of day
-                const endOfDay = new Date(endDate);
-                endOfDay.setHours(23, 59, 59, 999);
-
-                return {
-                  field: fieldMap[filter.id],
-                  operator: "between",
-                  value: [
-                    new Date(startDate).toISOString(),
-                    endOfDay.toISOString(),
-                  ],
-                };
-              }
-              // Handle array format [startDate, endDate]
-              else if (Array.isArray(filter.value) && filter.value.length === 2) {
-                const [startDate, endDate] = filter.value;
-                // Set end date to end of day
-                const endOfDay = new Date(endDate);
-                endOfDay.setHours(23, 59, 59, 999);
-
-                return {
-                  field: fieldMap[filter.id],
-                  operator: "between",
-                  value: [
-                    new Date(startDate).toISOString(),
-                    endOfDay.toISOString(),
-                  ],
-                };
-              }
+            if (filter.id === "createdAt" && filter.value?.length === 2) {
+              const [startDate, endDate] = filter.value;
+              const endOfDay = new Date(endDate);
+              endOfDay.setHours(23, 59, 59, 999);
+              return {
+                field: fieldMap[filter.id],
+                operator: "between",
+                value: [new Date(startDate).toISOString(), endOfDay.toISOString()],
+              };
             }
-
-            // For member filter specifically
             if (filter.id === "member") {
               return {
-                field: "member", // Backend should handle member ID lookup
+                field: "member",
                 operator: "in",
                 value: Array.isArray(filter.value)
-                  ? filter.value.map((v) => {
-                    // If v is a number, it's already the member ID
-                    if (typeof v === "number") return v;
-                    // If v is an object with value property, extract the ID
-                    if (typeof v === "object" && v.value) return v.value;
-                    // Otherwise, it might be the ID as string
-                    return parseInt(v) || v;
-                  })
-                  : [typeof filter.value === "object" ? filter.value.value : filter.value],
+                  ? filter.value.map((v) => (typeof v === "object" ? v.value : v))
+                  : [filter.value],
               };
             }
-
-            // For ID filter
-            if (filter.id === "id") {
-              return {
-                field: "id",
-                operator: "like",
-                value: filter.value,
-              };
-            }
-
-            // For other filters
             return {
               field: fieldMap[filter.id] || filter.id,
               operator: "in",
@@ -1325,118 +1147,53 @@ export default function Contributions() {
         sortBy: sorting[0]?.id || "createdAt",
         order: sorting[0]?.desc ? "DESC" : "ASC",
       };
-
       console.log("Final API params:", params);
-
       const { data } = await api.get(`/contributions`, { params });
       console.log("API Response:", data);
-
-      // Verify if data.results exists and has content
       if (!data?.results || data.results.length === 0) {
         console.log("No data returned from API");
-        return {
-          items: [],
-          totalPages: 0,
-          meta: null,
-        };
+        return { items: [], totalPages: 0, meta: null };
       }
-
-      console.log("Raw contributions count:", data.results.length);
-      console.log("First raw contribution:", data.results[0]);
-
-
-      // Aggregate by member so each member appears once with total amount
-      const memberIdToAggregate = new Map<number, any>();
-      data?.results?.forEach((e) => {
-        const memberId = e?.member?.id;
-        if (!memberId) return;
-        const contributionTotal = Number(e?.depositAmount || 0) + Number(e?.solidarityAmount || 0);
-        const existing = memberIdToAggregate.get(memberId);
-        if (!existing) {
-          memberIdToAggregate.set(memberId, {
-            id: e?.id, // Use the contribution ID for the row ID
-            member: e?.member,
-            group: e?.group?.name,
-            createdAt: e?.createdAt,
-            totalAmount: contributionTotal,
-            _groups: new Set<string>(e?.group?.name ? [e.group.name] : []),
-            _memberId: memberId, // Store member ID separately
-          });
-        } else {
-          existing.totalAmount += contributionTotal;
-          // Update to the most recent contribution ID and date
-          if (new Date(e?.createdAt) > new Date(existing.createdAt)) {
-            existing.id = e?.id; // Update to latest contribution ID
-            existing.createdAt = e?.createdAt;
-          }
-          if (e?.group?.name) existing._groups.add(e.group.name);
-        }
-      });
-
-      const aggregatedItems = Array.from(memberIdToAggregate.values()).map((item) => {
-        const result = {
-          ...item,
-          group: item._groups && item._groups.size > 1 ? "Multiple" : item.group || "-",
-        };
-        // Remove internal properties
-        delete result._groups;
-        delete result._memberId;
-        return result;
-      });
-
-      console.log("Aggregated items count:", aggregatedItems.length);
-      console.log("First aggregated item:", aggregatedItems[0]);
-      console.log("Aggregated item keys:", aggregatedItems.length > 0 ? Object.keys(aggregatedItems[0]) : []);
-
-      const finalResult = {
-        items: aggregatedItems,
-        totalPages: Math.max(1, Math.ceil(aggregatedItems.length / (params.limit || 15))),
-        meta: aggregatedItems.length > 0 ? {
+      return {
+        items: data.results,
+        totalPages: data?.totalPages || 1,
+        meta: data.results.length && {
           id: "TOTAL",
-          totalAmount: aggregatedItems.reduce((a, b) => a + Number(b.totalAmount || 0), 0),
+          totalAmount: data.results.reduce((a, b) => a + Number(b.totalAmount || 0), 0),
           meta: { isFooter: true },
-        } : null,
+        },
       };
-
-      console.log("Final result:", finalResult);
-      return finalResult;
     },
   });
 
-  const handleDelete = (record) => {
-    confirmModal.setIsLoading(true);
-    return api
-      .delete(`/contributions/${record.id}`)
-      .then(() => {
-        recordsQuery.refetch();
-        confirmModal.close();
-        toast.success("Contribution deleted successfully");
-      })
-      .catch((e) => {
-        confirmModal.setIsLoading(false);
-        toast.error(e.message);
-      });
-  };
-
-  const [selectedContribution, setSelectedContribution] = useState(null);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-  const [selectedMemberForDetails, setSelectedMemberForDetails] = useState<Member | null>(null);
-  const [isMemberDialogOpen, setIsMemberDialogOpen] = useState(false);
-
-  // Add query for contribution details
   const contributionDetailsQuery = useQuery(
     ["contribution-details", selectedContribution?.id],
     async () => {
       if (!selectedContribution?.id) return null;
-      const { data } = await api.get(
-        `/contributions/${selectedContribution.id}`
-      );
+      const { data } = await api.get(`/contributions/${selectedContribution.id}`);
       return data.data;
     },
-    {
-      enabled: !!selectedContribution?.id,
-    }
+    { enabled: !!selectedContribution?.id }
   );
+
+  const handleDelete = (record) => {
+    confirmModal.setIsLoading(true);
+  };
+
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    setDateRange(range);
+    if (range?.from && range?.to) {
+      setColumnFilters((prev) => {
+        const otherFilters = prev.filter((f) => f.id !== "createdAt");
+        return [
+          ...otherFilters,
+          { id: "createdAt", value: [range.from, range.to] },
+        ];
+      });
+    } else {
+      setColumnFilters((prev) => prev.filter((f) => f.id !== "createdAt"));
+    }
+  };
 
   const columns: ColumnDef<ContributionData, unknown>[] = [
     {
@@ -1475,11 +1232,9 @@ export default function Contributions() {
         if (row.original.meta?.isFooter) {
           return <div className="font-medium">TOTAL</div>;
         }
-        const id = row.getValue("id");
-        console.log("Displaying ID:", id, "for row:", row.original);
         return (
           <div className="flex items-center gap-3 truncate">
-            #{id}
+            #{row.getValue("id")}
           </div>
         );
       },
@@ -1511,24 +1266,13 @@ export default function Contributions() {
       ),
       cell: ({ row }) => {
         const member = row.getValue("member") as Member;
-        console.log("Member cell rendering:", member);
-
-        if (row.original.meta?.isFooter) {
-          return null;
-        }
-
-        if (!member) {
-          console.log("No member found for row:", row.original);
-          return <div>No member</div>;
-        }
-
         return (
           <div className="flex items-center gap-3">
             <Avatar className="h-8 w-8">
               <AvatarImage src={member?.avatar} />
               <AvatarFallback>
-                {member?.firstName?.[0] || 'U'}
-                {member?.lastName?.[0] || 'N'}
+                {member?.firstName?.[0]}
+                {member?.lastName?.[0]}
               </AvatarFallback>
             </Avatar>
             <button
@@ -1538,7 +1282,7 @@ export default function Contributions() {
               }}
               className="font-medium hover:underline"
             >
-              {member?.fullNames || `${member?.firstName || 'Unknown'} ${member?.lastName || 'Member'}`}
+              {member?.firstName} {member?.lastName}
             </button>
           </div>
         );
@@ -1555,16 +1299,18 @@ export default function Contributions() {
         if (row.original.meta?.isFooter) {
           return null;
         }
+        const group = row.getValue("group");
+        // If group is an object, show its name
+        const groupName = typeof group === 'object' && group !== null ? group.name : group;
         return (
           <div className="flex items-center gap-3 truncate">
-            {row.getValue("group")}
+            {groupName || "-"}
           </div>
         );
       },
       enableSorting: true,
       enableHiding: false,
     },
-    // Replace duplicated amounts with a single Total Amount column
     {
       accessorKey: "totalAmount",
       header: ({ column }) => (
@@ -1702,90 +1448,221 @@ export default function Contributions() {
       ),
     },
   ];
-  React.useEffect(() => {
+
+  useEffect(() => {
     console.log("Current pagination:", { pageIndex, pageSize });
     console.log("Current filters:", columnFilters);
   }, [pageIndex, pageSize, columnFilters]);
 
-  // Add a function to handle date range changes
-  const handleDateRangeChange = (range: DateRange | undefined) => {
-    setDateRange(range);
-    if (range?.from && range?.to) {
-      setColumnFilters((prev) => {
-        const otherFilters = prev.filter((f) => f.id !== "createdAt");
-        return [
-          ...otherFilters,
-          {
-            id: "createdAt",
-            value: [range.from, range.to],
-          },
-        ];
-      });
-    } else {
-      setColumnFilters((prev) => prev.filter((f) => f.id !== "createdAt"));
-    }
-  };
-
   return (
     <div className="container mx-auto py-10">
+      <Dialog open={isExcelDialogOpen} onOpenChange={setExcelDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Review & Add Uploaded Contributions</DialogTitle>
+          </DialogHeader>
+          {excelRows.length > 0 ? (
+            <ScrollArea className="max-h-[60vh]">
+              {excelRows.map((row, idx) => (
+                <form
+                  key={idx}
+                  className="flex gap-2 mb-2 items-center"
+                  onSubmit={async e => {
+                    e.preventDefault();
+                    const payload = mapExcelRowToPayload(row);
+                    if (payload.error) {
+                      toast.error(payload.error);
+                      return;
+                    }
+                    try {
+                      console.log('Sending contribution payload:', payload);
+                      await api.post('/contributions', payload);
+                      toast.success(`Contribution for ${row.Member || row['Member']} added!`);
+                      setExcelRows(prev => prev.filter((_, i) => i !== idx));
+                      if (typeof recordsQuery?.refetch === 'function') recordsQuery.refetch();
+                    } catch (err) {
+                      const message = err?.response?.data?.message || err?.message || 'Failed to add contribution';
+                      toast.error(message);
+                      console.error('Add contribution error:', err);
+                    }
+                  }}
+                >
+                  <input className="border px-2 py-1 rounded w-16" value={row.ID || ''} onChange={e => {
+                    const updated = [...excelRows]; updated[idx].ID = e.target.value; setExcelRows(updated);
+                  }} placeholder="ID" />
+                  <input className="border px-2 py-1 rounded w-24" value={row.Date || ''} onChange={e => {
+                    const updated = [...excelRows]; updated[idx].Date = e.target.value; setExcelRows(updated);
+                  }} placeholder="Date" />
+                  <input className="border px-2 py-1 rounded w-40" value={row.Member || ''} onChange={e => {
+                    const updated = [...excelRows]; updated[idx].Member = e.target.value; setExcelRows(updated);
+                  }} placeholder="Member" />
+                  <input className="border px-2 py-1 rounded w-32" value={row.Group || ''} onChange={e => {
+                    const updated = [...excelRows]; updated[idx].Group = e.target.value; setExcelRows(updated);
+                  }} placeholder="Group" />
+                  <input className="border px-2 py-1 rounded w-32" value={row['Total Amount'] || ''} onChange={e => {
+                    const updated = [...excelRows]; updated[idx]['Total Amount'] = e.target.value; setExcelRows(updated);
+                  }} placeholder="Total Amount" />
+                  <button type="submit" className="bg-blue-500 text-white px-3 py-1 rounded">Add</button>
+                </form>
+              ))}
+            </ScrollArea>
+          ) : (
+            <div className="text-center text-muted-foreground">No data found in Excel file.</div>
+          )}
+          {excelRows.length > 0 && (
+            <div className="flex justify-center mt-6">
+              <button
+                className="px-6 py-2 rounded font-semibold text-white" style={{ background: '#1A56DB' }}
+                onClick={async () => {
+                  if (excelRows.length === 0) return;
+                  let successCount = 0;
+                  let errorCount = 0;
+                  for (let idx = 0; idx < excelRows.length; idx++) {
+                    const row = excelRows[idx];
+                    const payload = mapExcelRowToPayload(row);
+                    if (payload.error) {
+                      errorCount++;
+                      toast.error(`Row ${row.ID || idx + 1}: ${payload.error}`);
+                      continue;
+                    }
+                    try {
+                      await api.post('/contributions', payload);
+                      successCount++;
+                    } catch (err) {
+                      errorCount++;
+                      const message = err?.response?.data?.message || err?.message || 'Failed to add contribution';
+                      toast.error(`Row ${row.ID || idx + 1}: ${message}`);
+                      console.error('Bulk add error for row:', row, err);
+                    }
+                  }
+                  if (successCount > 0) toast.success(`${successCount} contributions added!`);
+                  if (errorCount > 0) toast.error(`${errorCount} contributions failed.`);
+                  setExcelRows([]);
+                  if (typeof recordsQuery?.refetch === 'function') recordsQuery.refetch();
+                }}
+                disabled={excelRows.length === 0}
+              >
+                Add All
+              </button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Contributions</h1>
         <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn("justify-start text-left font-normal", !dateRange && "text-muted-foreground")}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {dateRange?.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}
+                    </>
+                  ) : (
+                    format(dateRange.from, "LLL dd, y")
+                  )
+                ) : (
+                  <span>Pick a date range</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={dateRange?.from}
+                selected={dateRange}
+                onSelect={handleDateRangeChange}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
           {(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary") && (
             <Button onClick={() => newRecordModal.open()}>
               <PlusCircle size={16} className="mr-2" />
               Add Contribution
             </Button>
           )}
-        </div>
-      </div>
-
-      {/* Search Bar */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
-          <Input
-            placeholder="Search contributions by member, group, or payment method..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            className="pl-10"
-          />
-          <svg
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          <div className="ml-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                document.getElementById('excel-upload')?.click();
+              }}
+            >
+              Upload Excel
+            </Button>
+            <input
+              id="excel-upload"
+              type="file"
+              accept=".xlsx,.xls"
+              style={{ display: 'none' }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  toast.success(`Selected file: ${file.name}`);
+                  try {
+                    const XLSX = await import('xlsx');
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                      const data = new Uint8Array(evt.target.result);
+                      const workbook = XLSX.read(data, { type: 'array' });
+                      const sheetName = workbook.SheetNames[0];
+                      const worksheet = workbook.Sheets[sheetName];
+                      const json = XLSX.utils.sheet_to_json(worksheet);
+                      setExcelRows(json);
+                      setExcelDialogOpen(true);
+                    };
+                    reader.readAsArrayBuffer(file);
+                  } catch (err) {
+                    toast.error('Failed to parse Excel file');
+                  }
+                }
+              }}
             />
-          </svg>
+          </div>
         </div>
       </div>
-
+      <div className="mb-6">
+        {/* Search bar removed as requested */}
+      </div>
       <DataTable
-        key={`contributions-${recordsQuery.data?.items?.length || 0}`}
         title="Contributions List"
         columns={columns}
         data={recordsQuery.data?.items || []}
         facets={[
           {
-            name: "id",
-            title: "ID",
-            type: "input",
-          },
-          {
-            name: "createdAt",
-            title: "Pick date range",
-            type: "date",
-          },
-          {
             name: "member",
             title: "Member",
             type: "select",
             options: members,
+          },
+          {
+            name: "group",
+            title: "Group",
+            type: "select",
+            options: groups,
+          },
+          {
+            name: "paymentMethod",
+            title: "Payment Method",
+            type: "select",
+            options: paymentMethods?.map((method) => ({
+              label: method.name || "Unnamed Payment Method",
+              value: method.name || "Unnamed Payment Method",
+            })) || [],
+          },
+          {
+            name: "receivedBy",
+            title: "Received By",
+            type: "select",
+            options: users,
           },
         ]}
         isLoading={recordsQuery.status === "loading"}
@@ -1806,19 +1683,15 @@ export default function Contributions() {
         pageCount={recordsQuery?.data?.totalPages || 0}
         isFetching={recordsQuery.isFetching}
       />
-
       <ConfirmModal
-        title={"Are you sure you want to delete?"}
-        description={`This will permanently delete the contribution and cannot be undone.`}
+        title="Are you sure you want to delete?"
+        description="This will permanently delete the contribution and cannot be undone."
         meta={confirmModal.meta}
-        onConfirm={(meta) => {
-          handleDelete(meta);
-        }}
+        onConfirm={(meta) => handleDelete(meta)}
         isLoading={confirmModal.isLoading}
         open={confirmModal.isOpen}
         onClose={() => confirmModal.close()}
       />
-
       <ContributionForm
         isOpen={newRecordModal.isOpen || Boolean(recordToEdit)}
         setIsOpen={(e) => {
@@ -1830,8 +1703,6 @@ export default function Contributions() {
         refetch={recordsQuery.refetch}
         record={recordToEdit}
       />
-
-      {/* Member contributions list dialog */}
       <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
         <DialogContent className="max-w-[95vw] md:max-w-3xl">
           <DialogHeader>
@@ -1852,7 +1723,6 @@ export default function Contributions() {
           ) : null}
         </DialogContent>
       </Dialog>
-
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
         <DialogContent className="max-w-[95vw] md:max-w-4xl h-[90vh] md:h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader className="border-b pb-4">
@@ -1867,15 +1737,11 @@ export default function Contributions() {
           ) : contributionDetailsQuery.data ? (
             <ScrollArea className="flex-1 pr-4">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-4">
-                {/* Left Column - Contribution Info */}
                 <div className="lg:col-span-5 space-y-6">
-                  {/* Contribution Summary */}
                   <div className="bg-card rounded-lg border p-4 md:p-6">
                     <div className="flex items-center gap-4 mb-6">
                       <Avatar className="h-16 w-16 md:h-20 md:w-20">
-                        <AvatarImage
-                          src={contributionDetailsQuery.data.member?.avatar}
-                        />
+                        <AvatarImage src={contributionDetailsQuery.data.member?.avatar} />
                         <AvatarFallback className="text-lg">
                           {contributionDetailsQuery.data.member?.firstName?.[0]}
                           {contributionDetailsQuery.data.member?.lastName?.[0]}
@@ -1890,92 +1756,56 @@ export default function Contributions() {
                         </p>
                       </div>
                     </div>
-
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Deposit Amount
-                          </p>
+                          <p className="text-sm text-muted-foreground">Deposit Amount</p>
                           <p className="font-medium">
-                            {(
-                              contributionDetailsQuery.data.depositAmount || 0
-                            ).toLocaleString()}{" "}
-                            FRW
+                            {(contributionDetailsQuery.data.depositAmount || 0).toLocaleString()} FRW
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Solidarity Amount
-                          </p>
+                          <p className="text-sm text-muted-foreground">Solidarity Amount</p>
                           <p className="font-medium">
-                            {(
-                              contributionDetailsQuery.data.solidarityAmount ||
-                              0
-                            ).toLocaleString()}{" "}
-                            FRW
+                            {(contributionDetailsQuery.data.solidarityAmount || 0).toLocaleString()} FRW
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Current Savings
-                          </p>
+                          <p className="text-sm text-muted-foreground">Current Savings</p>
                           <p className="font-medium">
-                            {(
-                              contributionDetailsQuery.data
-                                .currentSavingAmount || 0
-                            ).toLocaleString()}{" "}
-                            FRW
+                            {(contributionDetailsQuery.data.currentSavingAmount || 0).toLocaleString()} FRW
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Current Solidarity
-                          </p>
+                          <p className="text-sm text-muted-foreground">Current Solidarity</p>
                           <p className="font-medium">
-                            {(
-                              contributionDetailsQuery.data
-                                .currentSolidalityAmount || 0
-                            ).toLocaleString()}{" "}
-                            FRW
+                            {(contributionDetailsQuery.data.currentSolidalityAmount || 0).toLocaleString()} FRW
                           </p>
                         </div>
                       </div>
                     </div>
                   </div>
-
-                  {/* Payment Information */}
                   <div className="bg-card rounded-lg border p-4 md:p-6">
-                    <h3 className="text-base font-semibold mb-4">
-                      Payment Information
-                    </h3>
+                    <h3 className="text-base font-semibold mb-4">Payment Information</h3>
                     <Table className="w-full">
                       <TableBody>
                         <TableRow>
-                          <TableCell className="text-sm text-muted-foreground w-[170px]">
-                            Payment Method
-                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground w-[170px]">Payment Method</TableCell>
                           <TableCell className="font-medium">
                             {contributionDetailsQuery.data.paymentMethod?.name || "-"}
                           </TableCell>
                         </TableRow>
-
                         {contributionDetailsQuery.data.paymentMethod?.accountNumber && (
                           <TableRow>
-                            <TableCell className="text-sm text-muted-foreground">
-                              Account Number
-                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">Account Number</TableCell>
                             <TableCell className="font-medium">
                               {contributionDetailsQuery.data.paymentMethod.accountNumber}
                             </TableCell>
                           </TableRow>
                         )}
-
                         {contributionDetailsQuery.data.documentReceipt && (
                           <TableRow>
-                            <TableCell className="text-sm text-muted-foreground">
-                              Document/Receipt
-                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">Document/Receipt</TableCell>
                             <TableCell className="font-medium">
                               <a
                                 href={`/uploads/${contributionDetailsQuery.data.documentReceipt}`}
@@ -1988,218 +1818,122 @@ export default function Contributions() {
                             </TableCell>
                           </TableRow>
                         )}
-
                         {contributionDetailsQuery.data.transactionId && (
                           <TableRow>
-                            <TableCell className="text-sm text-muted-foreground">
-                              Transaction ID
-                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">Transaction ID</TableCell>
                             <TableCell className="font-medium">
                               {contributionDetailsQuery.data.transactionId}
                             </TableCell>
                           </TableRow>
                         )}
-
                         <TableRow>
-                          <TableCell className="text-sm text-muted-foreground">
-                            Received By
-                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">Received By</TableCell>
                           <TableCell className="font-medium">
                             {contributionDetailsQuery.data.receivedBy?.name || "-"}
                           </TableCell>
                         </TableRow>
-
                         <TableRow>
-                          <TableCell className="text-sm text-muted-foreground">
-                            Date
-                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">Date</TableCell>
                           <TableCell className="font-medium">
-                            {new Date(
-                              contributionDetailsQuery.data.createdAt
-                            ).toLocaleDateString()}
+                            {new Date(contributionDetailsQuery.data.createdAt).toLocaleDateString()}
                           </TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>
                   </div>
                 </div>
-
-                {/* Right Column - Group & Season Info */}
                 <div className="lg:col-span-7 space-y-6">
-                  {/* Group Information */}
                   <div className="bg-card rounded-lg border p-4 md:p-6">
-                    <h3 className="text-base font-semibold mb-4">
-                      Group Information
-                    </h3>
+                    <h3 className="text-base font-semibold mb-4">Group Information</h3>
                     <div className="space-y-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">
-                          Group Name
-                        </p>
-                        <p className="font-medium">
-                          {contributionDetailsQuery.data.group?.name}
-                        </p>
+                        <p className="text-sm text-muted-foreground">Group Name</p>
+                        <p className="font-medium">{contributionDetailsQuery.data.group?.name}</p>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Meeting Day
-                          </p>
+                          <p className="text-sm text-muted-foreground">Meeting Day</p>
+                          <p className="font-medium">{contributionDetailsQuery.data.group?.meetingDay}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Meeting Time</p>
                           <p className="font-medium">
-                            {contributionDetailsQuery.data.group?.meetingDay}
+                            {contributionDetailsQuery.data.group?.meetingStartTime} - {contributionDetailsQuery.data.group?.meetingEndTime}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Meeting Time
-                          </p>
+                          <p className="text-sm text-muted-foreground">Price Per Share</p>
                           <p className="font-medium">
-                            {
-                              contributionDetailsQuery.data.group
-                                ?.meetingStartTime
-                            }{" "}
-                            -{" "}
-                            {
-                              contributionDetailsQuery.data.group
-                                ?.meetingEndTime
-                            }
+                            {(contributionDetailsQuery.data.group?.pricePerShare || 0).toLocaleString()} FRW
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Price Per Share
-                          </p>
+                          <p className="text-sm text-muted-foreground">Solidarity Amount</p>
                           <p className="font-medium">
-                            {(
-                              contributionDetailsQuery.data.group
-                                ?.pricePerShare || 0
-                            ).toLocaleString()}{" "}
-                            FRW
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">
-                            Solidarity Amount
-                          </p>
-                          <p className="font-medium">
-                            {(
-                              contributionDetailsQuery.data.group
-                                ?.solidarityAmount || 0
-                            ).toLocaleString()}{" "}
-                            FRW
+                            {(contributionDetailsQuery.data.group?.solidarityAmount || 0).toLocaleString()} FRW
                           </p>
                         </div>
                       </div>
                       {contributionDetailsQuery.data.group?.meetingLocation && (
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Meeting Location
-                          </p>
-                          <p className="font-medium">
-                            {
-                              contributionDetailsQuery.data.group
-                                .meetingLocation
-                            }
-                          </p>
+                          <p className="text-sm text-muted-foreground">Meeting Location</p>
+                          <p className="font-medium">{contributionDetailsQuery.data.group.meetingLocation}</p>
                         </div>
                       )}
                     </div>
                   </div>
-
-                  {/* Season Information */}
                   <div className="bg-card rounded-lg border p-4 md:p-6">
-                    <h3 className="text-base font-semibold mb-4">
-                      Season Information
-                    </h3>
+                    <h3 className="text-base font-semibold mb-4">Season Information</h3>
                     <div className="space-y-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">
-                          Season Name
-                        </p>
-                        <p className="font-medium">
-                          {contributionDetailsQuery.data.season?.name}
-                        </p>
+                        <p className="text-sm text-muted-foreground">Season Name</p>
+                        <p className="font-medium">{contributionDetailsQuery.data.season?.name}</p>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Start Date
-                          </p>
-                          <p className="font-medium">
-                            {new Date(
-                              contributionDetailsQuery.data.season?.start
-                            ).toLocaleDateString()}
-                          </p>
+                          <p className="text-sm text-muted-foreground">Start Date</p>
+                          <p className="font-medium">{new Date(contributionDetailsQuery.data.season?.start).toLocaleDateString()}</p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            End Date
-                          </p>
-                          <p className="font-medium">
-                            {new Date(
-                              contributionDetailsQuery.data.season?.end
-                            ).toLocaleDateString()}
-                          </p>
+                          <p className="text-sm text-muted-foreground">End Date</p>
+                          <p className="font-medium">{new Date(contributionDetailsQuery.data.season?.end).toLocaleDateString()}</p>
                         </div>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Status</p>
                         <Badge
-                          variant={
-                            contributionDetailsQuery.data.season?.status ===
-                              "active"
-                              ? "default"
-                              : "secondary"
-                          }
-                          className={`${contributionDetailsQuery.data.season?.status ===
-                            "active"
-                            ? "bg-green-100 text-green-600"
-                            : "bg-red-100 text-red-600"
-                            } shadow-none`}
+                          variant={contributionDetailsQuery.data.season?.status === "active" ? "default" : "secondary"}
+                          className={`${contributionDetailsQuery.data.season?.status === "active" ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"} shadow-none`}
                         >
                           {contributionDetailsQuery.data.season?.status}
                         </Badge>
                       </div>
                       {contributionDetailsQuery.data.season?.description && (
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Description
-                          </p>
-                          <p className="text-sm">
-                            {contributionDetailsQuery.data.season.description}
-                          </p>
+                          <p className="text-sm text-muted-foreground">Description</p>
+                          <p className="text-sm">{contributionDetailsQuery.data.season.description}</p>
                         </div>
                       )}
                     </div>
                   </div>
-
-                  {/* Fines Section */}
                   {contributionDetailsQuery.data.fines?.length > 0 && (
                     <div className="bg-card rounded-lg border p-4 md:p-6">
                       <h3 className="text-base font-semibold mb-4">Fines</h3>
                       <div className="space-y-4">
-                        {contributionDetailsQuery.data.fines.map(
-                          (fine, index) => (
-                            <div key={index} className="border rounded-lg p-4">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                  <p className="text-sm text-muted-foreground">
-                                    Amount
-                                  </p>
-                                  <p className="font-medium">
-                                    {(fine.amount || 0).toLocaleString()} FRW
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">
-                                    Reason
-                                  </p>
-                                  <p className="font-medium">{fine.reason}</p>
-                                </div>
+                        {contributionDetailsQuery.data.fines.map((fine, index) => (
+                          <div key={index} className="border rounded-lg p-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-muted-foreground">Amount</p>
+                                <p className="font-medium">{(fine.amount || 0).toLocaleString()} FRW</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Reason</p>
+                                <p className="font-medium">{fine.reason}</p>
                               </div>
                             </div>
-                          )
-                        )}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}

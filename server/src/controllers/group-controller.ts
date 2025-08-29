@@ -115,6 +115,9 @@ export class GroupController {
         branchId,
         isActive = true,
         additionalNotes,
+        presidentId,
+        presidentEmail,
+        presidentPassword,
       } = req.body;
 
       // Check if group with same name exists
@@ -135,6 +138,35 @@ export class GroupController {
         return next(new NotFoundError("Branch not found"));
       }
 
+      // Handle president assignment if provided
+      let president: Member | null = null;
+      if (presidentId) {
+        // Check if member exists
+        president = await this.memberRepository.findOne({
+          where: { id: presidentId },
+        });
+
+        if (!president) {
+          return next(new NotFoundError("President member not found"));
+        }
+
+        // Check if member is already a leader in another group
+        const existingPresidentGroup = await this.repository.findOne({
+          where: [
+            { president: { id: presidentId } },
+            { accountant: { id: presidentId } },
+            { secretary: { id: presidentId } }
+          ],
+        });
+
+        if (existingPresidentGroup) {
+          return next(new Error(`This member is already a leader in group "${existingPresidentGroup.name}". A person cannot be a leader in multiple groups.`));
+        }
+
+        // Create/update user credentials for the president
+        await this.ensureLeaderCredentials(president, presidentEmail, presidentPassword);
+      }
+
       // Create basic group with minimal information
       const newGroup = this.repository.create({
         name,
@@ -143,13 +175,41 @@ export class GroupController {
         isActive,
         additionalNotes,
         meetingFrequency: "Monthly", // Default value
+        president, // Assign president if provided
       });
 
       const savedGroup = await this.repository.save(newGroup);
 
+      // If president was assigned, add them as a group member automatically
+      if (president) {
+        const { GroupMember } = await import("../entities/GroupMember");
+        const groupMemberRepository = AppDataSource.getRepository(GroupMember);
+        
+        // Check if member is already in this group
+        const existingMembership = await groupMemberRepository.findOne({
+          where: { 
+            member: { id: president.id },
+            group: { id: savedGroup.id }
+          }
+        });
+
+        if (!existingMembership) {
+          const groupMember = groupMemberRepository.create({
+            member: president,
+            group: savedGroup,
+            branch: branch,
+            loanEligibility: true, // Presidents are typically loan eligible
+            numberOfShares: 0, // Can be updated later
+          });
+          await groupMemberRepository.save(groupMember);
+        }
+      }
+
       res.status(201).json({
         status: "success",
-        message: "Basic group created successfully. You can now add members and assign a group leader.",
+        message: president 
+          ? `Basic group created successfully with ${president.firstName} ${president.lastName} as President. The President can now login and complete the group setup.`
+          : "Basic group created successfully. You can now assign a President who will complete the setup.",
         data: this.format(savedGroup),
       });
     }
@@ -223,9 +283,9 @@ export class GroupController {
       // Add president as group member if not already added
       const { GroupMember } = await import("../entities/GroupMember");
       const groupMemberRepository = AppDataSource.getRepository(GroupMember);
-
+      
       const existingMembership = await groupMemberRepository.findOne({
-        where: {
+        where: { 
           member: { id: president.id },
           group: { id: savedGroup.id }
         }
@@ -272,9 +332,9 @@ export class GroupController {
 
       // Check if user has permission to complete setup
       // Admin can always complete, or if user is already a leader of this group
-      const isGroupLeader = group.president?.id === user.member?.id ||
-        group.accountant?.id === user.member?.id ||
-        group.secretary?.id === user.member?.id;
+      const isGroupLeader = group.president?.id === user.member?.id || 
+                           group.accountant?.id === user.member?.id || 
+                           group.secretary?.id === user.member?.id;
 
       if (!user.isAdmin && !isGroupLeader) {
         return next(new Error("Access denied. Only administrators or existing group leaders can complete group setup."));
@@ -398,7 +458,7 @@ export class GroupController {
 
       // Update group with provided fields
       const updateData: Partial<Group> = {};
-
+      
       if (description !== undefined) updateData.description = description;
       if (president !== undefined) updateData.president = president;
       if (accountant !== undefined) updateData.accountant = accountant;
@@ -418,7 +478,7 @@ export class GroupController {
 
       // Merge updates with existing group
       Object.assign(group, updateData);
-
+      
       const savedGroup = await this.repository.save(group);
 
       res.status(200).json({
@@ -714,9 +774,9 @@ export class GroupController {
         hasAccess = true;
       } else {
         // Check if user is a leader of this group
-        if (group.president?.id === user.id ||
-          group.accountant?.id === user.id ||
-          group.secretary?.id === user.id) {
+        if (group.president?.id === user.id || 
+            group.accountant?.id === user.id || 
+            group.secretary?.id === user.id) {
           hasAccess = true;
         } else {
           // Check if user is a member of this group
@@ -802,9 +862,9 @@ export class GroupController {
         hasAccess = true;
       } else {
         // Check if user is a leader of this group
-        if (group.president?.id === user.id ||
-          group.accountant?.id === user.id ||
-          group.secretary?.id === user.id) {
+        if (group.president?.id === user.id || 
+            group.accountant?.id === user.id || 
+            group.secretary?.id === user.id) {
           hasAccess = true;
         }
       }
@@ -980,7 +1040,7 @@ export class GroupController {
       } else {
         // For non-admin users, check if they're a group leader or member
         console.log("👤 Non-admin user - checking group access");
-
+        
         // First, check if user is a group leader (president, accountant, secretary)
         const leaderGroups = await this.repository.find({
           where: [

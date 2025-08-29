@@ -136,11 +136,10 @@ export function BulkImport({
             <div>
               <div
                 {...getRootProps()}
-                className={`w-full border-dashed relative cursor-pointer py-4 ${
-                  fileError
+                className={`w-full border-dashed relative cursor-pointer py-4 ${fileError
                     ? "hover:bg-red-100 hover:bg-opacity-70 bg-red-50 border-red-200"
                     : "hover:bg-gray-100 border-gray-200 "
-                } border-2 flex-col  min-h-[100px] mb-4 rounded-md flex items-center justify-center gap-3`}
+                  } border-2 flex-col  min-h-[100px] mb-4 rounded-md flex items-center justify-center gap-3`}
               >
                 <input {...getInputProps()} />
 
@@ -269,3 +268,5 @@ export function BulkImport({
     </Dialog>
   );
 }
+
+export default BulkImport;

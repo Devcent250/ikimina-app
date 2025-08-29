@@ -12,9 +12,6 @@ router.get("/", controller.getAll);
 router.get("/:recordId", controller.getOne);
 router.patch("/:recordId", validateSchema(updateLoanSchema), controller.update);
 
-// Get maximum loan amount for a member
-router.get("/max-amount/:groupMemberId/:seasonId", controller.getMaxLoanAmount);
-
 // Loan approval routes
 router.post("/:recordId/approve", validateSchema(approveLoanSchema), controller.approveLoan);
 router.get("/:recordId/approval-status", controller.getLoanApprovalStatus);

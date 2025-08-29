@@ -12,22 +12,18 @@ export const createMemberSchema = Joi.object({
   idNumber: Joi.string().required(),
   country: Joi.string().optional().allow("").allow(null),
   currentAddress: Joi.string().optional().allow("").allow(null),
-  joinedAt: Joi.date().required(),
+  joinedAt: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()).required(),
   sourceOfIncome: Joi.string()
     .valid("Employment", "Business", "Farming", "Freelance", "Other")
     .required(),
-  branchId: Joi.number().required(),
-  districtId: Joi.number().required(),
-  groupIds: Joi.array().items(Joi.string()).optional().allow(null).default([]),
-  // Role assignment (admin can assign member as leader during creation)
-  roleAssignments: Joi.array().items(
-    Joi.object({
-      groupId: Joi.number().required(),
-      role: Joi.string().valid("President", "Accountant", "Secretary").required(),
-      email: Joi.string().email().required(),
-      password: Joi.string().min(6).required(),
-    })
-  ).optional().default([])
+  branchId: Joi.alternatives().try(Joi.number(), Joi.string().pattern(/^\d+$/)).required(),
+  districtId: Joi.alternatives().try(Joi.number(), Joi.string().pattern(/^\d+$/)).required(),
+  memberCode: Joi.string().length(4).pattern(/^\d{4}$/).required().messages({
+    'string.length': 'Member code must be exactly 4 characters',
+    'string.pattern.base': 'Member code must contain only digits',
+    'any.required': 'Member code is required'
+  }),
+  groupIds: Joi.array().items(Joi.string()).optional().allow(null).default([])
 });
 
 export const updateMemberSchema = createMemberSchema.fork(
@@ -44,6 +40,7 @@ export const updateMemberSchema = createMemberSchema.fork(
     "joinedAt",
     "sourceOfIncome",
     "branchId",
+    "memberCode",
     "groupIds",
   ],
   (schema) => schema.optional()
