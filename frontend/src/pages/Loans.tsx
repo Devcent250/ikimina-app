@@ -1,3 +1,4 @@
+
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import DataTableColumnHeader from "@/components/datatable/DataTableColumnHeader";
 import { Loader, MoreVertical, PlusCircle, CheckCircle, XCircle } from "lucide-react";
@@ -38,6 +39,9 @@ import { toast } from "sonner";
 import useConfirmModal from "@/hooks/useConfirmModal";
 import ConfirmModal from "@/components/modal/ConfirmModal";
 import { Textarea } from "@/components/ui/textarea";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import {
@@ -249,7 +253,7 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                                     <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
                                   ))
                                 ) : (
-                                  <SelectItem value="" disabled>
+                                  <SelectItem value="placeholder" disabled>
                                     {loadingCategories ? "Loading..." : "No categories found"}
                                   </SelectItem>
                                 )}
@@ -857,20 +861,121 @@ function LoanRequestTab({
   // setRecordToEdit
 }) {
   const { user } = useAuth();
-  
+
+  // Export handlers for Loan Requests
+  const handleExportExcel = () => {
+    const items = recordsQuery?.data?.items || [];
+    if (!items.length) return;
+    const data = items.map((item) => ({
+      Date: item.date,
+      Member: item.member,
+      Amount: item.amount,
+      TotalPaid: item.totalPaid,
+      DueAmount: item.dueAmount,
+      Status: item.status,
+      LoanType: item.loanType,
+      PaymentFrequency: item.paymentFrequency,
+      Group: item.group,
+      CreatedBy: item.createdBy,
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Loan Requests");
+    XLSX.writeFile(workbook, "loan_requests.xlsx");
+  };
+
+  const handleExportPDF = async () => {
+    const items = recordsQuery?.data?.items || [];
+    if (!items.length) return;
+    const doc = new jsPDF();
+    // Remove incorrect autoTable(doc) call
+
+    // Header
+    doc.setFontSize(11);
+    doc.text(`${new Date().toLocaleDateString()}, ${new Date().toLocaleTimeString()}`, 14, 14);
+    doc.text("ikimina | Loans & Payments", 105, 14, { align: "center" });
+    doc.text("ikimina management system.", 200, 14, { align: "right" });
+
+    // Report Title
+    doc.setFontSize(14);
+    doc.text("Loan Requests Report", 14, 28);
+    doc.setFontSize(22);
+    doc.text("LOAN REQUESTS", 14, 42);
+
+    // Table
+    const headers = [
+      ["Date", "Member", "Amount", "Total Paid", "Due Amount", "Status", "Loan Type", "Payment Frequency", "Group", "Created By"]
+    ];
+    const rows = items.map(item => [
+      item.date,
+      item.member,
+      item.amount,
+      item.totalPaid,
+      item.dueAmount,
+      item.status,
+      item.loanType,
+      item.paymentFrequency,
+      item.group,
+      item.createdBy
+    ]);
+    const tableResult = autoTable(doc, {
+      head: headers,
+      body: rows,
+      startY: 50,
+      styles: { fontSize: 11, cellPadding: 2 },
+      headStyles: { fillColor: [255, 255, 255], textColor: 20, fontStyle: 'bold', lineWidth: 0.5, lineColor: 200 },
+      theme: 'grid',
+      margin: { left: 14, right: 14 },
+      tableLineColor: 200,
+      tableLineWidth: 0.5,
+      alternateRowStyles: { fillColor: [255, 255, 255] },
+      didDrawPage: (data) => {
+        // Custom header/footer if needed
+      }
+    });
+
+    // Summary section (move below table, add spacing)
+    const totalAmount = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const totalPaid = items.reduce((sum, item) => sum + (parseFloat(item.totalPaid) || 0), 0);
+    const dueAmount = items.reduce((sum, item) => sum + (parseFloat(item.dueAmount) || 0), 0);
+    // Move summary and footer to the very bottom of the page
+    let bottomY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 30 : 100;
+    doc.setFontSize(13);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Total Requests: ${items.length}`, 14, bottomY);
+    doc.text(`Total Amount: ${totalAmount.toLocaleString()} FRW`, 80, bottomY);
+    doc.text(`Total Paid: ${totalPaid.toLocaleString()} FRW`, 14, bottomY + 8);
+    doc.text(`Total Due: ${dueAmount.toLocaleString()} FRW`, 80, bottomY + 8);
+    doc.setFont(undefined, 'normal');
+
+    // Footer at the very bottom
+    doc.setFontSize(10);
+    doc.text(`Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 14, bottomY + 20);
+
+    doc.save("loan_requests.pdf");
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Loan Requests</h3>
-        {(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary") && (
-          <Button
-            onClick={() => newRecordModal.open()}
-            size="sm"
-          >
-            <PlusCircle size={16} className="mr-2" />
-            <span>Add new Loan</span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportPDF}>
+            Export PDF
           </Button>
-        )}
+          <Button variant="outline" size="sm" onClick={handleExportExcel}>
+            Export Excel
+          </Button>
+          {(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary") && (
+            <Button
+              onClick={() => newRecordModal.open()}
+              size="sm"
+            >
+              <PlusCircle size={16} className="mr-2" />
+              <span>Add new Loan</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       <DataTable
@@ -903,7 +1008,61 @@ function LoanRequestTab({
 
 // Reports Tab Component
 function ReportsTab() {
+  const handleExportPDF = () => {
+    if (!loanReports || !loanReports.items) return;
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text("Loan Requests", 10, 10);
+    const headers = [
+      "Date", "Member", "Amount", "Total Paid", "Due Amount", "Status", "Loan Type", "Payment Frequency", "Group", "Created By"
+    ];
+    let y = 20;
+    doc.setFontSize(10);
+    doc.text(headers.join(" | "), 10, y);
+    y += 8;
+    loanReports.items.forEach((item) => {
+      const row = [
+        item.date,
+        item.member,
+        item.amount,
+        item.totalPaid,
+        item.dueAmount,
+        item.status,
+        item.loanType,
+        item.paymentFrequency,
+        item.group,
+        item.createdBy
+      ].join(" | ");
+      doc.text(row, 10, y);
+      y += 8;
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+    });
+    doc.save("loan_requests.pdf");
+  };
   const { toPDF, targetRef } = usePDF({ filename: "loan-reports.pdf" });
+  const handleExportExcel = () => {
+    if (!loanReports || !loanReports.items) return;
+    // Prepare data for Excel
+    const data = loanReports.items.map((item) => ({
+      Date: item.date,
+      Member: item.member,
+      Amount: item.amount,
+      TotalPaid: item.totalPaid,
+      DueAmount: item.dueAmount,
+      Status: item.status,
+      LoanType: item.loanType,
+      PaymentFrequency: item.paymentFrequency,
+      Group: item.group,
+      CreatedBy: item.createdBy,
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Loan Requests");
+    XLSX.writeFile(workbook, "loan_requests.xlsx");
+  };
   const [isExporting, setIsExporting] = useState(false);
   const { data: loanReports, isLoading, error } = useQuery(
     ["loan-reports"],
@@ -967,10 +1126,10 @@ function ReportsTab() {
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Loan Reports</h3>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled>
+            <Button variant="outline" size="sm" onClick={handleExportPDF}>
               Export PDF
             </Button>
-            <Button variant="outline" size="sm" disabled>
+            <Button variant="outline" size="sm" onClick={handleExportExcel}>
               Export Excel
             </Button>
           </div>
