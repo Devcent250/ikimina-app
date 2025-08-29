@@ -1102,51 +1102,59 @@ export default function Contributions() {
     ],
     keepPreviousData: true,
     queryFn: async () => {
-      console.log("Current filters:", columnFilters);
+      // Build params for API
       const params = {
         page_size: pageSize,
         page: pageIndex + 1,
-        ...(searchText && { search: searchText }),
-        ...(columnFilters.length > 0 && {
-          filters: columnFilters.map((filter) => {
-            const fieldMap = {
-              member: "member",
-              group: "group.name",
-              paymentMethod: "paymentMethod.name",
-              receivedBy: "receivedBy.name",
-              createdAt: "createdAt",
-            };
-            if (filter.id === "createdAt" && filter.value?.length === 2) {
-              const [startDate, endDate] = filter.value;
-              const endOfDay = new Date(endDate);
-              endOfDay.setHours(23, 59, 59, 999);
-              return {
-                field: fieldMap[filter.id],
-                operator: "between",
-                value: [new Date(startDate).toISOString(), endOfDay.toISOString()],
-              };
-            }
-            if (filter.id === "member") {
-              return {
-                field: "member",
-                operator: "in",
-                value: Array.isArray(filter.value)
-                  ? filter.value.map((v) => (typeof v === "object" ? v.value : v))
-                  : [filter.value],
-              };
-            }
+        sortBy: sorting[0]?.id || "createdAt",
+        order: sorting[0]?.desc ? "DESC" : "ASC",
+      };
+
+      // If searchText is present, send as search param (for member name)
+      if (searchText) {
+        params.search = searchText;
+      }
+
+      // Build filters array
+      if (columnFilters.length > 0) {
+        params.filters = columnFilters.map((filter) => {
+          const fieldMap = {
+            member: "member",
+            group: "group.name",
+            paymentMethod: "paymentMethod.name",
+            receivedBy: "receivedBy.name",
+            createdAt: "createdAt",
+          };
+          if (filter.id === "createdAt" && filter.value?.length === 2) {
+            const [startDate, endDate] = filter.value;
+            const endOfDay = new Date(endDate);
+            endOfDay.setHours(23, 59, 59, 999);
             return {
-              field: fieldMap[filter.id] || filter.id,
+              field: fieldMap[filter.id],
+              operator: "between",
+              value: [new Date(startDate).toISOString(), endOfDay.toISOString()],
+            };
+          }
+          if (filter.id === "member") {
+            return {
+              field: "member",
               operator: "in",
               value: Array.isArray(filter.value)
                 ? filter.value.map((v) => (typeof v === "object" ? v.value : v))
                 : [filter.value],
             };
-          }),
-        }),
-        sortBy: sorting[0]?.id || "createdAt",
-        order: sorting[0]?.desc ? "DESC" : "ASC",
-      };
+          }
+          return {
+            field: fieldMap[filter.id] || filter.id,
+            operator: "in",
+            value: Array.isArray(filter.value)
+              ? filter.value.map((v) => (typeof v === "object" ? v.value : v))
+              : [filter.value],
+          };
+        });
+      }
+
+      // Debug
       console.log("Final API params:", params);
       const { data } = await api.get(`/contributions`, { params });
       console.log("API Response:", data);
