@@ -95,7 +95,7 @@ const formSchema = z.object({
   districtId: z.string().min(1, "District is required"),
   groupIds: z.array(z.string()).optional(),
   branchId: z.string().min(1, "Branch is required"),
-  memberCode: z.string().length(4, "Member code must be exactly 4 digits").regex(/^\d{4}$/, "Member code must be 4 digits"),
+  memberCode: z.string().optional(),
   role: z.enum(["President", "Secretary", "Accountant", "Member"], {
     required_error: "Role is required",
   }),
@@ -270,6 +270,11 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
     }
   }, [form.watch("branchId"), refetchGroups]);
 
+  // Set default member code
+  useEffect(() => {
+    form.setValue("memberCode", "1234");
+  }, [form]);
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     // Only enforce for leader roles
     const leaderRoles = ["President", "Secretary", "Accountant"];
@@ -367,6 +372,8 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                           <FormControl>
                             <Input
                               placeholder="e.g. 1234"
+                              defaultValue="1234"
+                              readOnly
                               error={fieldState?.error?.message}
                               maxLength={4}
                               pattern="\d{4}"
@@ -416,7 +423,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                       name="branchId"
                       render={({ field, fieldState }) => (
                         <FormItem>
-                          <FormLabel>Zone</FormLabel>
+                          <FormLabel>Sector</FormLabel>
                           <FormControl>
                             <Select
                               onValueChange={field.onChange}
@@ -425,7 +432,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                             >
                               <FormControl>
                                 <SelectTrigger error={fieldState?.error?.message}>
-                                  <SelectValue placeholder="Select zone" />
+                                  <SelectValue placeholder="Select sector" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>

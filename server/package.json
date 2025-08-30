@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node --files src/index.ts",
+    "typeorm": "typeorm-ts-node-commonjs",
     "build": "tsc",
     "migration:generate": "sh -c 'npx typeorm-ts-node-commonjs migration:generate ./src/database/migrations/$0 -d ./src/data-source.ts'",
     "migration:create": "npx typeorm-ts-node-commonjs migration:create -d ./src/data-source.ts",

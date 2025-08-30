@@ -231,7 +231,7 @@ export default function DashboardOverview() {
               <Card className="shadow-none rounded-md">
                 <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                   <CardTitle className="text-sm font-medium">
-                    Zones Count
+                    Sectors Count
                   </CardTitle>
                   <Building className="w-4 h-4 text-muted-foreground" />
                 </CardHeader>
@@ -244,7 +244,7 @@ export default function DashboardOverview() {
                     )}
                   </div>
                   <div className="flex items-center text-xs text-muted-foreground mt-1">
-                    Total zones across.
+                    Total sectors across.
                   </div>
                 </CardContent>
               </Card>
@@ -253,7 +253,7 @@ export default function DashboardOverview() {
             <Card className="shadow-none rounded-md">
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                 <CardTitle className="text-sm font-medium">
-                  {isGroupLeader ? "Current Season Savings (Your Group)" : "Current Season Savings"}
+                  {isGroupLeader ? "Current Circle Savings (Your Group)" : "Current Circle Savings"}
                 </CardTitle>
                 <Calendar className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
@@ -266,7 +266,7 @@ export default function DashboardOverview() {
                   )}
                 </div>
                 <div className="flex items-center text-xs text-muted-foreground mt-1">
-                  <span className="font-medium">Season 3</span> - 45% complete
+                  <span className="font-medium">Circle 3</span> - 45% complete
                 </div>
               </CardContent>
             </Card>

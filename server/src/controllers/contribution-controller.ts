@@ -48,65 +48,70 @@ export class ContributionController {
         },
         {
           path: "contributions.paymentMethod",
-          if(user.isAdmin) {
-      const params = {
-        page: Number(req.query.page) || 1,
-        limit: Number(req.query.page_size) || 25,
-        filters: req.query.filters ? (typeof req.query.filters === 'string' ? JSON.parse(req.query.filters) : req.query.filters) : [],
-        search: req.query.search ? String(req.query.search) : undefined,
-        sortBy: req.query.sortBy ? String(req.query.sortBy) : undefined,
-        order: req.query.order ? String(req.query.order) : undefined,
-      };
-      let customConditions = [];
-
-      // Handle member filter (by ID)
-      if (params.filters && Array.isArray(params.filters)) {
-        const memberFilter = params.filters.find(f => f.field === "member");
-        if (memberFilter) {
-          customConditions.push({
-            where: "member.id = :memberId",
-            parameters: { memberId: memberFilter.value[0] }
-          });
-          params.filters = params.filters.filter(f => f.field !== "member");
+          alias: "paymentMethod"
+        },
+        {
+          path: "contributions.receivedBy",
+          alias: "receivedBy"
         }
+      ]
+    });
+  }
+
+  private format = (contribution: Contribution) => {
+    return {
+      ...contribution,
+    };
+  };
+
+  create = asyncHandler(
+    async (req: Request & { file?: any }, res: Response, next: NextFunction) => {
+      const {
+        groupMemberId,
+        depositAmount,
+        solidarityAmount,
+        paymentMethodId,
+        receivedById,
+        branchId,
+        transactionId,
+      } = req.body;
+
+      // Handle file upload
+      const documentReceipt = req.file ? req.file.filename : req.body.documentReceipt;
+
+      const groupMember = await AppDataSource.getRepository(
+        GroupMember
+      ).findOne({
+        where: { id: groupMemberId },
+        relations: ["group", "member"],
+      });
+
+      if (!groupMember) {
+        return next(new NotFoundError("Group member not found"));
       }
 
-      // Handle search for member name (fuzzy)
-      if (params.search) {
-        customConditions.push({
-          where: `(member.firstName ILIKE :search OR member.lastName ILIKE :search)`,
-          parameters: { search: `%${params.search}%` }
-        });
-        delete params.search;
+      const branch = await AppDataSource.getRepository(Branch).findOne({
+        where: { id: branchId },
+      });
+
+      if (!branch) {
+        return next(new NotFoundError("Branch not found"));
       }
 
-      // Add custom joins for related entities
-      const customJoins = [
-        "contributions.member",
-        "contributions.group",
-        "contributions.paymentMethod",
-        "contributions.receivedBy",
-        "contributions.branch"
-      ];
+      const currentSeason = await AppDataSource.getRepository(Season).findOne({
+        where: { status: "active" },
+      });
 
-      try {
-        const result = await this.queryBuilder.buildAndExecute(
-          params,
-          customConditions,
-          customJoins
-        );
-        console.log(`Found ${result.results?.length || 0} contributions`);
-        const totalPages = Math.ceil((result.total || 0) / (result.limit || 25));
-        res.json({
-          ...result,
-          results: result.results?.map(this.format) || [],
-          totalPages,
-        });
-      } catch (error) {
-        console.error("Query execution error:", error);
-        next(error);
+      if (!currentSeason) {
+        return next(new NotFoundError("There is no active season"));
       }
-    } else if (user.role?.name === "President" || user.role?.name === "Accountant" || user.role?.name === "Secretary") {
+
+      const paymentMethod = await AppDataSource.getRepository(
+        PaymentMethod
+      ).findOne({
+        where: { id: paymentMethodId },
+      });
+
       if (!paymentMethod) {
         return next(new NotFoundError("Payment method not found"));
       }
@@ -176,380 +181,368 @@ export class ContributionController {
     }
   );
 
-    getOne = asyncHandler(
-      async (req: Request, res: Response, next: NextFunction) => {
-        const { recordId } = req.params;
+  getOne = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      const { recordId } = req.params;
 
-        const contribution = await this.repository.findOne({
-          where: { id: Number(recordId) },
-          relations: [
-            "member",
-            "groupMember",
-            "season",
-            "group",
-            "paymentMethod",
-            "receivedBy",
-            "fines",
-          ],
-        });
+      const contribution = await this.repository.findOne({
+        where: { id: Number(recordId) },
+        relations: [
+          "member",
+          "groupMember",
+          "season",
+          "group",
+          "paymentMethod",
+          "receivedBy",
+          "fines",
+        ],
+      });
 
-        if (!contribution) {
-          return next(new NotFoundError("Contribution not found"));
-        }
-
-        res.status(200).json({
-          status: "success",
-          data: this.format(contribution),
-        });
+      if (!contribution) {
+        return next(new NotFoundError("Contribution not found"));
       }
-    );
 
-    update = asyncHandler(
-      async (req: Request & { file?: any }, res: Response, next: NextFunction) => {
-        const { recordId } = req.params;
-        const {
-          groupMemberId,
-          depositAmount,
-          solidarityAmount,
-          paymentMethodId,
-          receivedById,
-          branchId,
-          transactionId,
-        } = req.body;
+      res.status(200).json({
+        status: "success",
+        data: this.format(contribution),
+      });
+    }
+  );
 
-        // Handle file upload
-        const documentReceipt = req.file ? req.file.filename : req.body.documentReceipt;
+  update = asyncHandler(
+    async (req: Request & { file?: any }, res: Response, next: NextFunction) => {
+      const { recordId } = req.params;
+      const {
+        groupMemberId,
+        depositAmount,
+        solidarityAmount,
+        paymentMethodId,
+        receivedById,
+        branchId,
+        transactionId,
+      } = req.body;
 
-        let contribution = await this.repository.findOne({
-          where: { id: Number(recordId) },
-          relations: [
-            "member.id",
-            "member",
-            "groupMember",
-            "season",
-            "group",
-            "paymentMethod",
-            "receivedBy",
-          ],
-        });
+      // Handle file upload
+      const documentReceipt = req.file ? req.file.filename : req.body.documentReceipt;
 
-        if (!contribution) {
-          return next(new NotFoundError("Contribution not found"));
-        }
+      let contribution = await this.repository.findOne({
+        where: { id: Number(recordId) },
+        relations: [
+          "member.id",
+          "member",
+          "groupMember",
+          "season",
+          "group",
+          "paymentMethod",
+          "receivedBy",
+        ],
+      });
 
-        if (groupMemberId) {
-          const groupMember = await AppDataSource.getRepository(
-            GroupMember
-          ).findOne({
-            where: { id: groupMemberId },
-          });
-          if (!groupMember) {
-            return next(new NotFoundError("Group member not found"));
-          }
-          contribution.groupMember = groupMember;
-        }
-
-        if (paymentMethodId) {
-          const paymentMethod = await AppDataSource.getRepository(
-            PaymentMethod
-          ).findOne({
-            where: { id: paymentMethodId },
-          });
-          if (!paymentMethod) {
-            return next(new NotFoundError("Payment method not found"));
-          }
-          contribution.paymentMethod = paymentMethod;
-        }
-
-        if (receivedById) {
-          const receivedBy = await AppDataSource.getRepository(User).findOne({
-            where: { id: receivedById },
-          });
-          if (!receivedBy) {
-            return next(new NotFoundError("User not found"));
-          }
-          contribution.receivedBy = receivedBy;
-        }
-
-        if (branchId) {
-          const branch = await AppDataSource.getRepository(Branch).findOne({
-            where: { id: branchId },
-          });
-          if (!branch) {
-            return next(new NotFoundError("Branch not found"));
-          }
-          contribution.branch = branch;
-        }
-
-        // If deposit amount or solidarity amount changes, recalculate amounts
-        if (depositAmount !== undefined || solidarityAmount !== undefined) {
-          const newDepositAmount =
-            depositAmount !== undefined
-              ? Number(depositAmount)
-              : contribution.depositAmount;
-          const newSolidarityAmount =
-            solidarityAmount !== undefined
-              ? Number(solidarityAmount)
-              : contribution.solidarityAmount;
-
-          // Get previous contribution to get the before amounts
-          const previousContribution = await this.repository
-            .createQueryBuilder("contribution")
-            .where("contribution.member.id = :memberId", {
-              memberId: contribution.member.id,
-            })
-            .andWhere("contribution.season.id = :seasonId", {
-              seasonId: contribution.season.id,
-            })
-            .andWhere("contribution.id != :contributionId", {
-              contributionId: contribution.id,
-            })
-            .orderBy("contribution.createdAt", "DESC")
-            .getOne();
-
-          let beforeSavingAmount = 0;
-          let beforeSolidalityAmount = 0;
-
-          if (previousContribution) {
-            beforeSavingAmount = previousContribution.currentSavingAmount;
-            beforeSolidalityAmount = previousContribution.currentSolidalityAmount;
-          }
-
-          // Update current amounts
-          contribution.currentSavingAmount =
-            beforeSavingAmount + newDepositAmount;
-          contribution.currentSolidalityAmount =
-            beforeSolidalityAmount + newSolidarityAmount;
-          contribution.beforeSavingAmount = beforeSavingAmount;
-          contribution.beforeSolidalityAmount = beforeSolidalityAmount;
-          contribution.depositAmount = newDepositAmount;
-          contribution.solidarityAmount = newSolidarityAmount;
-        }
-
-        // Update payment method specific fields
-        if (documentReceipt !== undefined) {
-          contribution.documentReceipt = documentReceipt;
-        }
-        if (transactionId !== undefined) {
-          contribution.transactionId = transactionId;
-        }
-
-        // Update the contribution
-        const updatedContribution = await this.repository.save(contribution);
-
-        res.status(200).json({
-          status: "success",
-          data: this.format(updatedContribution),
-        });
+      if (!contribution) {
+        return next(new NotFoundError("Contribution not found"));
       }
-    );
 
-    getAll = asyncHandler(
-      async (req: Request, res: Response, next: NextFunction) => {
-        const user = req.user;
+      if (groupMemberId) {
+        const groupMember = await AppDataSource.getRepository(
+          GroupMember
+        ).findOne({
+          where: { id: groupMemberId },
+        });
+        if (!groupMember) {
+          return next(new NotFoundError("Group member not found"));
+        }
+        contribution.groupMember = groupMember;
+      }
 
-        if (user.isAdmin) {
-          const params: QueryParams = {
-            page: Number(req.query.page) || 1,
-            limit: Number(req.query.page_size) || 25,
-            filters: req.query.filters ? (typeof req.query.filters === 'string' ? JSON.parse(req.query.filters) : req.query.filters) : [],
-            search: req.query.search ? String(req.query.search) : undefined,
-            sortBy: req.query.sortBy ? String(req.query.sortBy) : undefined,
-            order: req.query.order && (String(req.query.order).toUpperCase() === 'ASC' || String(req.query.order).toUpperCase() === 'DESC')
-              ? String(req.query.order).toUpperCase() as 'ASC' | 'DESC'
-              : undefined,
-          };
+      if (paymentMethodId) {
+        const paymentMethod = await AppDataSource.getRepository(
+          PaymentMethod
+        ).findOne({
+          where: { id: paymentMethodId },
+        });
+        if (!paymentMethod) {
+          return next(new NotFoundError("Payment method not found"));
+        }
+        contribution.paymentMethod = paymentMethod;
+      }
 
-          // Custom conditions array
-          const customConditions = [];
+      if (receivedById) {
+        const receivedBy = await AppDataSource.getRepository(User).findOne({
+          where: { id: receivedById },
+        });
+        if (!receivedBy) {
+          return next(new NotFoundError("User not found"));
+        }
+        contribution.receivedBy = receivedBy;
+      }
 
-          // *** ADD THIS NEW CODE HERE ***
-          // Check for member filter and handle it specially
-          if (params.filters && params.filters.length > 0) {
-            const memberFilter = params.filters.find(f => f.field === "member" && f.operator === "in");
-            if (memberFilter) {
-              console.log("Found member filter:", memberFilter);
-              // Convert the filter to use member.id instead
-              customConditions.push({
-                where: `member.id IN (:...memberIds)`,
-                parameters: { memberIds: memberFilter.value }
-              });
+      if (branchId) {
+        const branch = await AppDataSource.getRepository(Branch).findOne({
+          where: { id: branchId },
+        });
+        if (!branch) {
+          return next(new NotFoundError("Branch not found"));
+        }
+        contribution.branch = branch;
+      }
 
-              // Remove the original member filter as we're handling it separately
-              params.filters = params.filters.filter(f => f.field !== "member");
-              console.log("Updated filters after member handling:", params.filters);
-            }
-          }
-          // *** END OF NEW CODE ***
+      // If deposit amount or solidarity amount changes, recalculate amounts
+      if (depositAmount !== undefined || solidarityAmount !== undefined) {
+        const newDepositAmount =
+          depositAmount !== undefined
+            ? Number(depositAmount)
+            : contribution.depositAmount;
+        const newSolidarityAmount =
+          solidarityAmount !== undefined
+            ? Number(solidarityAmount)
+            : contribution.solidarityAmount;
 
-          // Handle search specifically for member names
-          if (params.search) {
+        // Get previous contribution to get the before amounts
+        const previousContribution = await this.repository
+          .createQueryBuilder("contribution")
+          .where("contribution.member.id = :memberId", {
+            memberId: contribution.member.id,
+          })
+          .andWhere("contribution.season.id = :seasonId", {
+            seasonId: contribution.season.id,
+          })
+          .andWhere("contribution.id != :contributionId", {
+            contributionId: contribution.id,
+          })
+          .orderBy("contribution.createdAt", "DESC")
+          .getOne();
+
+        let beforeSavingAmount = 0;
+        let beforeSolidalityAmount = 0;
+
+        if (previousContribution) {
+          beforeSavingAmount = previousContribution.currentSavingAmount;
+          beforeSolidalityAmount = previousContribution.currentSolidalityAmount;
+        }
+
+        // Update current amounts
+        contribution.currentSavingAmount =
+          beforeSavingAmount + newDepositAmount;
+        contribution.currentSolidalityAmount =
+          beforeSolidalityAmount + newSolidarityAmount;
+        contribution.beforeSavingAmount = beforeSavingAmount;
+        contribution.beforeSolidalityAmount = beforeSolidalityAmount;
+        contribution.depositAmount = newDepositAmount;
+        contribution.solidarityAmount = newSolidarityAmount;
+      }
+
+      // Update payment method specific fields
+      if (documentReceipt !== undefined) {
+        contribution.documentReceipt = documentReceipt;
+      }
+      if (transactionId !== undefined) {
+        contribution.transactionId = transactionId;
+      }
+
+      // Update the contribution
+      const updatedContribution = await this.repository.save(contribution);
+
+      res.status(200).json({
+        status: "success",
+        data: this.format(updatedContribution),
+      });
+    }
+  );
+
+  getAll = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      const user = req.user;
+
+      // Check user permissions and filter data accordingly
+      if (user.isAdmin) {
+        // Admin can see all contributions - proceed with normal query
+        const params: QueryParams = {
+          page: 1,
+          limit: 100,
+          filters: [],
+        };
+
+        // Custom conditions array
+        const customConditions = [];
+
+        // *** ADD THIS NEW CODE HERE ***
+        // Check for member filter and handle it specially
+        if (params.filters && params.filters.length > 0) {
+          const memberFilter = params.filters.find(f => f.field === "member" && f.operator === "in");
+          if (memberFilter) {
+            console.log("Found member filter:", memberFilter);
+            // Convert the filter to use member.id instead
             customConditions.push({
-              where: `(member.firstName ILIKE :search OR member.lastName ILIKE :search)`,
-              parameters: { search: `%${params.search}%` }
+              where: `member.id IN (:...memberIds)`,
+              parameters: { memberIds: memberFilter.value }
             });
-            // Remove the search parameter since we're handling it manually
-            delete params.search;
+
+            // Remove the original member filter as we're handling it separately
+            params.filters = params.filters.filter(f => f.field !== "member");
+            console.log("Updated filters after member handling:", params.filters);
           }
-
-          // Add custom joins for related entities (force alias for member)
-          const customJoins = [
-            "contributions.member",
-            "contributions.group",
-            "contributions.paymentMethod",
-            "contributions.receivedBy",
-            "contributions.branch"
-          ];
-
-          try {
-            // Always join member as 'member' alias for search to work
-            params.forceJoins = [
-              { path: "contributions.member", alias: "member" }
-            ];
-
-            const result = await this.queryBuilder.buildAndExecute(
-              params,
-              customConditions,
-              customJoins
-            );
-
-            console.log(`Found ${result.results?.length || 0} contributions`);
-
-            // Calculate totalPages for pagination
-            const totalPages = Math.ceil((result.total || 0) / (result.limit || 25));
-
-            res.json({
-              ...result,
-              results: result.results?.map(this.format) || [],
-              totalPages,
-            });
-          } catch (error) {
-            console.error("Query execution error:", error);
-            next(error);
-          }
-        } else if (user.role?.name === "President" || user.role?.name === "Accountant" || user.role?.name === "Secretary") {
-          // Group leaders can only see contributions from their groups
-          const { Group } = await import("../entities/Group");
-          const groupRepository = AppDataSource.getRepository(Group);
-
-          // Find groups where the user is a leader
-          let userGroups = [];
-
-          if (user.role?.name === "President") {
-            const presidentGroups = await groupRepository.find({
-              where: { president: { id: user.id } },
-              select: ["id"]
-            });
-            userGroups = presidentGroups;
-          } else if (user.role?.name === "Accountant") {
-            const accountantGroups = await groupRepository.find({
-              where: { accountant: { id: user.id } },
-              select: ["id"]
-            });
-            userGroups = accountantGroups;
-          } else if (user.role?.name === "Secretary") {
-            const secretaryGroups = await groupRepository.find({
-              where: { secretary: { id: user.id } },
-              select: ["id"]
-            });
-            userGroups = secretaryGroups;
-          }
-
-          if (userGroups.length === 0) {
-            // User is a leader but has no groups, return empty result
-            res.json({
-              results: [],
-              pagination: {
-                page: 1,
-                limit: 25,
-                total: 0,
-                totalPages: 0
-              }
-            });
-            return;
-          }
-
-          const groupIds = userGroups.map(g => g.id);
-
-          // Get contributions from user's groups
-          const contributions = await this.repository
-            .createQueryBuilder("contribution")
-            .leftJoinAndSelect("contribution.member", "member")
-            .leftJoinAndSelect("contribution.group", "group")
-            .leftJoinAndSelect("contribution.paymentMethod", "paymentMethod")
-            .leftJoinAndSelect("contribution.receivedBy", "receivedBy")
-            .leftJoinAndSelect("contribution.branch", "branch")
-            .where("contribution.group.id IN (:...groupIds)", { groupIds })
-            .orderBy("contribution.createdAt", "DESC")
-            .getMany();
-
-          const formattedResults = contributions.map(this.format);
-
-          res.json({
-            results: formattedResults,
-            pagination: {
-              page: 1,
-              limit: contributions.length,
-              total: contributions.length,
-              totalPages: 1
-            }
-          });
-        } else {
-          // Regular members can only see their own contributions
-          const contributions = await this.repository
-            .createQueryBuilder("contribution")
-            .leftJoinAndSelect("contribution.member", "member")
-            .leftJoinAndSelect("contribution.group", "group")
-            .leftJoinAndSelect("contribution.paymentMethod", "paymentMethod")
-            .leftJoinAndSelect("contribution.receivedBy", "receivedBy")
-            .leftJoinAndSelect("contribution.branch", "branch")
-            .where("contribution.member.id = :memberId", { memberId: user.id })
-            .orderBy("contribution.createdAt", "DESC")
-            .getMany();
-
-          const formattedResults = contributions.map(this.format);
-
-          res.json({
-            results: formattedResults,
-            pagination: {
-              page: 1,
-              limit: contributions.length,
-              total: contributions.length,
-              totalPages: 1
-            }
-          });
         }
-      }
-    );
+        // *** END OF NEW CODE ***
 
-    delete = asyncHandler(
-      async (req: Request, res: Response, next: NextFunction) => {
-        const { recordId } = req.params;
-
-        const contribution = await this.repository.findOne({
-          where: { id: Number(recordId) },
-          relations: ["fines"],
-        });
-
-        if (!contribution) {
-          return next(new NotFoundError("Contribution not found"));
+        // Handle search specifically for member names
+        if (params.search) {
+          customConditions.push({
+            where: `(member.firstName ILIKE :search OR member.lastName ILIKE :search)`,
+            parameters: { search: `%${params.search}%` }
+          });
+          // Remove the search parameter since we're handling it manually
+          delete params.search;
         }
 
-        // Check if contribution has related fines
-        if (contribution.fines?.length) {
-          return next(
-            new BadRequestError(
-              "Cannot delete contribution with associated fines"
-            )
+        // Add custom joins for related entities
+        const customJoins = [
+          "contributions.member",
+          "contributions.group",
+          "contributions.paymentMethod",
+          "contributions.receivedBy",
+          "contributions.branch"
+        ];
+
+        try {
+          const result = await this.queryBuilder.buildAndExecute(
+            params,
+            customConditions,
+            customJoins
           );
+
+          console.log(`Found ${result.results?.length || 0} contributions`);
+
+          res.json({
+            ...result,
+            results: result.results?.map(this.format) || []
+          });
+        } catch (error) {
+          console.error("Query execution error:", error);
+          next(error);
+        }
+      } else if (user.role?.name === "President" || user.role?.name === "Accountant" || user.role?.name === "Secretary") {
+        // Group leaders can only see contributions from their groups
+        const { Group } = await import("../entities/Group");
+        const groupRepository = AppDataSource.getRepository(Group);
+
+        // Find groups where the user is a leader
+        let userGroups = [];
+
+        if (user.role?.name === "President") {
+          const presidentGroups = await groupRepository.find({
+            where: { president: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = presidentGroups;
+        } else if (user.role?.name === "Accountant") {
+          const accountantGroups = await groupRepository.find({
+            where: { accountant: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = accountantGroups;
+        } else if (user.role?.name === "Secretary") {
+          const secretaryGroups = await groupRepository.find({
+            where: { secretary: { id: user.id } },
+            select: ["id"]
+          });
+          userGroups = secretaryGroups;
         }
 
-        await this.repository.remove(contribution);
+        if (userGroups.length === 0) {
+          // User is a leader but has no groups, return empty result
+          res.json({
+            results: [],
+            pagination: {
+              page: 1,
+              limit: 25,
+              total: 0,
+              totalPages: 0
+            }
+          });
+          return;
+        }
 
-        res.status(204).json({
-          status: "success",
-          data: null,
+        const groupIds = userGroups.map(g => g.id);
+
+        // Get contributions from user's groups
+        const contributions = await this.repository
+          .createQueryBuilder("contribution")
+          .leftJoinAndSelect("contribution.member", "member")
+          .leftJoinAndSelect("contribution.group", "group")
+          .leftJoinAndSelect("contribution.paymentMethod", "paymentMethod")
+          .leftJoinAndSelect("contribution.receivedBy", "receivedBy")
+          .leftJoinAndSelect("contribution.branch", "branch")
+          .where("contribution.group.id IN (:...groupIds)", { groupIds })
+          .orderBy("contribution.createdAt", "DESC")
+          .getMany();
+
+        const formattedResults = contributions.map(this.format);
+
+        res.json({
+          results: formattedResults,
+          pagination: {
+            page: 1,
+            limit: contributions.length,
+            total: contributions.length,
+            totalPages: 1
+          }
+        });
+      } else {
+        // Regular members can only see their own contributions
+        const contributions = await this.repository
+          .createQueryBuilder("contribution")
+          .leftJoinAndSelect("contribution.member", "member")
+          .leftJoinAndSelect("contribution.group", "group")
+          .leftJoinAndSelect("contribution.paymentMethod", "paymentMethod")
+          .leftJoinAndSelect("contribution.receivedBy", "receivedBy")
+          .leftJoinAndSelect("contribution.branch", "branch")
+          .where("contribution.member.id = :memberId", { memberId: user.id })
+          .orderBy("contribution.createdAt", "DESC")
+          .getMany();
+
+        const formattedResults = contributions.map(this.format);
+
+        res.json({
+          results: formattedResults,
+          pagination: {
+            page: 1,
+            limit: contributions.length,
+            total: contributions.length,
+            totalPages: 1
+          }
         });
       }
-    );
-  }
+    }
+  );
+
+  delete = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      const { recordId } = req.params;
+
+      const contribution = await this.repository.findOne({
+        where: { id: Number(recordId) },
+        relations: ["fines"],
+      });
+
+      if (!contribution) {
+        return next(new NotFoundError("Contribution not found"));
+      }
+
+      // Check if contribution has related fines
+      if (contribution.fines?.length) {
+        return next(
+          new BadRequestError(
+            "Cannot delete contribution with associated fines"
+          )
+        );
+      }
+
+      await this.repository.remove(contribution);
+
+      res.status(204).json({
+        status: "success",
+        data: null,
+      });
+    }
+  );
+}

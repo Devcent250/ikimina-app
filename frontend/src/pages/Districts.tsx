@@ -257,7 +257,7 @@ export default function Districts() {
     {
       accessorKey: "branches",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Zones" />
+        <DataTableColumnHeader column={column} title="Sectors" />
       ),
       cell: ({ row }) => {
         const branches = row.getValue("branches") as { id: number; name: string }[] | undefined;

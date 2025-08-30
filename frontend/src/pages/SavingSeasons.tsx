@@ -70,7 +70,7 @@ function SeasonForm({ isOpen, setIsOpen, refetch, record }) {
       .then(() => {
         refetch();
         toast.success(
-          record ? "Season updated successfully" : "Season created successfully"
+          record ? "Circle updated successfully" : "Circle created successfully"
         );
         setIsOpen(false);
         form.reset();
@@ -87,7 +87,7 @@ function SeasonForm({ isOpen, setIsOpen, refetch, record }) {
       <DialogContent className="sm:max-w-lg p-0 gap-0">
         <DialogHeader className="border-b pb-3">
           <DialogTitle>
-            {record ? "Update Season" : "Add New Season"}
+            {record ? "Update Circle" : "Add New Circle"}
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
@@ -99,10 +99,10 @@ function SeasonForm({ isOpen, setIsOpen, refetch, record }) {
                   name="name"
                   render={({ field, fieldState }) => (
                     <FormItem>
-                      <FormLabel>Season Name</FormLabel>
+                      <FormLabel>Circle Name</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter season name"
+                          placeholder="Enter circle name"
                           error={fieldState?.error?.message}
                           {...field}
                         />
@@ -177,7 +177,7 @@ function SeasonForm({ isOpen, setIsOpen, refetch, record }) {
                         <FormLabel>Description</FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Enter season description"
+                            placeholder="Enter circle description"
                             error={fieldState?.error?.message}
                             {...field}
                           />
@@ -211,7 +211,7 @@ function SeasonForm({ isOpen, setIsOpen, refetch, record }) {
                 {form.formState.isSubmitting && (
                   <Loader className="mr-2 h-4 w-4 text-white animate-spin" />
                 )}
-                {record ? "Update Season" : "Add Season"}
+                {record ? "Update Circle" : "Add Circle"}
               </Button>
             </DialogFooter>
           </form>
@@ -348,14 +348,14 @@ export default function SavingSeasons() {
                   setRecordToEdit(row?.original);
                 }}
               >
-                Update Season
+                Update Circle
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
                   confirmModal.open({ meta: row?.original });
                 }}
               >
-                Delete Season
+                Delete Circle
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -427,7 +427,7 @@ export default function SavingSeasons() {
       .then(() => {
         recordsQuery.refetch();
         confirmModal.close();
-        toast.success("Season deleted successfully");
+        toast.success("Circle deleted successfully");
       })
       .catch((e) => {
         confirmModal.setIsLoading(false);
@@ -439,7 +439,7 @@ export default function SavingSeasons() {
     <>
       <ConfirmModal
         title={"Are you sure you want to delete?"}
-        description={`This will permanently delete the saving season and cannot be undone.`}
+        description={`This will permanently delete the saving circle and cannot be undone.`}
         meta={confirmModal.meta}
         onConfirm={(meta) => {
           handleDelete(meta);
@@ -453,7 +453,7 @@ export default function SavingSeasons() {
         <div className="flex items-center justify-between space-y-2- my-3">
           <div className="flex items-start gap-2 flex-col">
             <h2 className="text-[16px] font-semibold tracking-tight">
-              Saving Seasons Management
+              Saving Circles Management
             </h2>
           </div>
           <div className="space-x-2">
@@ -464,7 +464,7 @@ export default function SavingSeasons() {
               size="sm"
             >
               <PlusCircle size={16} className="mr-2" />
-              <span>Add new Season</span>
+              <span>Add new Circle</span>
             </Button>
           </div>
         </div>

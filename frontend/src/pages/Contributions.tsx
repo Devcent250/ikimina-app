@@ -319,20 +319,20 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
       ? {
         ...record,
         totalAmount: (
-          Number(record.depositAmount) + Number(record.solidarityAmount)
+          Number(record.depositAmount || 0) + Number(record.solidarityAmount || 0)
         ).toString(),
-        depositAmount: record.depositAmount?.toString(),
-        solidarityAmount: record.solidarityAmount?.toString(),
+        depositAmount: record.depositAmount?.toString() || "0",
+        solidarityAmount: record.solidarityAmount?.toString() || "0",
         groupMemberId: record.groupMemberId,
-        groupId: record.groupId?.toString(),
-        paymentMethodId: record.paymentMethodId?.toString(),
-        branchId: record.branchId?.toString(),
+        groupId: record.groupId?.toString() || "",
+        paymentMethodId: record.paymentMethodId?.toString() || "",
+        branchId: record.branchId?.toString() || "",
         contributionType: record.depositAmount > 0 ? "saving" : "solidarity",
         documentReceipt: record.documentReceipt || null,
         transactionId: record.transactionId || "",
       }
       : {
-        totalAmount: "",
+        totalAmount: "0",
         depositAmount: "0",
         solidarityAmount: "0",
         groupMemberId: undefined,

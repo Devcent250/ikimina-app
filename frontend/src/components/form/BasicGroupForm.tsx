@@ -116,7 +116,7 @@ export default function BasicGroupForm({ isOpen, setIsOpen, refetch }: BasicGrou
     <Sheet open={isOpen} onOpenChange={handleClose}>
       <SheetContent side="right" className="w-[400px] sm:w-[600px]">
         <SheetHeader>
-          <SheetTitle>Create Basic Group</SheetTitle>
+          <SheetTitle>Create Group</SheetTitle>
         </SheetHeader>
 
         <Form {...form}>
