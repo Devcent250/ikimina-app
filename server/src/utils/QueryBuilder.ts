@@ -160,7 +160,7 @@ export class QueryBuilder<T> {
       queryBuilder.select(selection);
     }
 
-    // Apply search with brackets
+    // Apply search with brackets (also support custom search conditions)
     if (search && this.options.searchableFields?.length) {
       queryBuilder.andWhere(
         new Brackets((qb) => {
@@ -171,6 +171,14 @@ export class QueryBuilder<T> {
           });
         })
       );
+    }
+    // Apply custom search conditions (Google-like search)
+    if (customConditions && customConditions.length > 0) {
+      customConditions.forEach((condition) => {
+        queryBuilder.andWhere(new Brackets((qb) => {
+          qb.andWhere(condition.where, condition.parameters);
+        }));
+      });
     }
 
     // Apply filters with brackets
@@ -263,14 +271,7 @@ export class QueryBuilder<T> {
       });
     }
 
-    // Apply custom conditions
-    customConditions.forEach((condition, index) => {
-      queryBuilder.andWhere(
-        new Brackets((qb) => {
-          qb.andWhere(condition.where, condition.parameters);
-        })
-      );
-    });
+    // (Removed duplicate application of customConditions)
 
     // Apply sorting
     if (sortBy && this.options.allowedSortFields?.includes(sortBy)) {

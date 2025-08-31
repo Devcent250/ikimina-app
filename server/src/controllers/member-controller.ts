@@ -132,8 +132,11 @@ export class MemberController {
       }
 
       const newMember = this.repository.create({
+
         ...memberData,
-        branch: { id: branch.id }
+        branch: { id: branch.id },
+        ...(req.body.email ? { email: req.body.email } : {}),
+        ...(req.body.password ? { password: await require('bcrypt').hash(req.body.password, 10) } : {}),
       });
 
       // Save the member and handle the possibility of getting an array
@@ -165,6 +168,28 @@ export class MemberController {
             });
 
             await this.groupMemberRepository.save(groupMembership);
+
+            // If role is provided and is a leader role, update the group entity and ensure credentials
+            const leaderRoles = ["President", "Secretary", "Accountant"];
+            if (req.body.role && leaderRoles.includes(req.body.role)) {
+              const groupRepo = AppDataSource.getRepository(require("../entities/Group").Group);
+              const group = await groupRepo.findOne({ where: { id: parseInt(groupId) } });
+              if (group) {
+                if (req.body.role === "President") group.president = savedMember;
+                if (req.body.role === "Secretary") group.secretary = savedMember;
+                if (req.body.role === "Accountant") group.accountant = savedMember;
+
+                // Ensure credentials for leader
+                if (req.body.email && req.body.password) {
+                  savedMember.email = req.body.email;
+                  const bcrypt = require('bcrypt');
+                  savedMember.password = await bcrypt.hash(req.body.password, 10);
+                  await this.repository.save(savedMember);
+                }
+
+                await groupRepo.save(group);
+              }
+            }
           } catch (error) {
             console.error(`Error creating group membership for group ${groupId}:`, error);
           }
@@ -301,6 +326,22 @@ export class MemberController {
             member: { id: updatedMember.id },
             group: { id: parseInt(groupId) }
           });
+        }
+
+        // Assign leader role for all selected groups if role is provided and is a leader role
+        const leaderRoles = ["President", "Secretary", "Accountant"];
+        if (memberData.role && leaderRoles.includes(memberData.role)) {
+          const groupRepo = AppDataSource.getRepository(require("../entities/Group").Group);
+          for (const groupId of groupIds) {
+            if (!groupId || isNaN(parseInt(groupId))) continue;
+            const group = await groupRepo.findOne({ where: { id: parseInt(groupId) } });
+            if (group) {
+              if (memberData.role === "President") group.president = updatedMember;
+              if (memberData.role === "Secretary") group.secretary = updatedMember;
+              if (memberData.role === "Accountant") group.accountant = updatedMember;
+              await groupRepo.save(group);
+            }
+          }
         }
       }
 

@@ -8,7 +8,7 @@ import {
   Loader,
   Download,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useQuery } from "react-query";
 import { usePDF } from "react-to-pdf";
 import { Button } from "@/components/ui/button";
@@ -241,6 +241,7 @@ function MemberContributionsTable({
                 <TableHead className="font-semibold">Group</TableHead>
                 <TableHead className="font-semibold">Payment Method</TableHead>
                 <TableHead className="text-right w-[160px] font-semibold">Amount</TableHead>
+                <TableHead className="text-right w-[160px] font-semibold">Total Solidarity</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -257,9 +258,10 @@ function MemberContributionsTable({
                   <TableCell>{c.group?.name || "-"}</TableCell>
                   <TableCell>{c.paymentMethod?.name || "-"}</TableCell>
                   <TableCell className="text-right w-[160px] font-medium">
-                    {(
-                      Number(c.depositAmount || 0) + Number(c.solidarityAmount || 0)
-                    ).toLocaleString()} FRW
+                    {Number(c.depositAmount || 0).toLocaleString()} FRW
+                  </TableCell>
+                  <TableCell className="text-right w-[160px] font-medium">
+                    {Number(c.solidarityAmount || 0).toLocaleString()} FRW
                   </TableCell>
                 </TableRow>
               ))}
@@ -1074,6 +1076,8 @@ export default function Contributions() {
   const [recordToEdit, setRecordToEdit] = useState(undefined);
   const [allGroupMemberships, setAllGroupMemberships] = useState([]);
   const [searchText, setSearchText] = useState("");
+  const [debouncedSearchText, setDebouncedSearchText] = useState("");
+  const debounceTimeout = useRef(null);
   const [columnFilters, setColumnFilters] = useState([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [sorting, setSorting] = useState([]);
@@ -1095,10 +1099,25 @@ export default function Contributions() {
 
   const { pageIndex, pageSize } = pagination;
 
+  // Debounce searchText changes
+  useEffect(() => {
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+    debounceTimeout.current = setTimeout(() => {
+      setDebouncedSearchText(searchText);
+    }, 300); // 300ms debounce
+    return () => {
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+      }
+    };
+  }, [searchText]);
+
   const recordsQuery = useQuery({
     queryKey: [
       "contributions",
-      { search: searchText, filter: columnFilters, sort: sorting, pageIndex, pageSize },
+      { search: debouncedSearchText, filter: columnFilters, sort: sorting, pageIndex, pageSize },
     ],
     keepPreviousData: true,
     queryFn: async () => {
@@ -1204,6 +1223,7 @@ export default function Contributions() {
   };
 
   const columns: ColumnDef<ContributionData, unknown>[] = [
+
     {
       id: "select",
       header: ({ table }) => (
@@ -1320,12 +1340,12 @@ export default function Contributions() {
       enableHiding: false,
     },
     {
-      accessorKey: "totalAmount",
+      accessorKey: "depositAmount",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Total Amount" />
+        <DataTableColumnHeader column={column} title="Amount" />
       ),
       cell: ({ row }) => {
-        const amount = row.getValue("totalAmount");
+        const amount = row.getValue("depositAmount");
         if (row.original.meta?.isFooter) {
           return (
             <div className="flex items-center truncate gap-3 font-semibold">
@@ -1419,6 +1439,29 @@ export default function Contributions() {
         return (
           <div className="flex items-center gap-3 truncate">
             {row.getValue("receivedBy")}
+          </div>
+        );
+      },
+      enableSorting: true,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "solidarityAmount",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Solidarity" />
+      ),
+      cell: ({ row }) => {
+        const amount = row.getValue("solidarityAmount");
+        if (row.original.meta?.isFooter) {
+          return (
+            <div className="flex items-center truncate gap-3 font-semibold">
+              {Number(amount || 0).toLocaleString()} FRW
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center truncate gap-3">
+            {Number(amount || 0).toLocaleString()} FRW
           </div>
         );
       },

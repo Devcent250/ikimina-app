@@ -99,6 +99,15 @@ export class GroupMemberController {
       // Set branch from group's branch
       req.body.branch = group.branch;
 
+      // If role is provided and is a leader role, update the group entity
+      const leaderRoles = ["President", "Secretary", "Accountant"];
+      if (req.body.role && leaderRoles.includes(req.body.role)) {
+        if (req.body.role === "President") group.president = member;
+        if (req.body.role === "Secretary") group.secretary = member;
+        if (req.body.role === "Accountant") group.accountant = member;
+        await this.groupRepository.save(group);
+      }
+
       const newGroupMember = this.repository.create(req.body);
       const [savedGroupMember] = await this.repository.save(newGroupMember);
 

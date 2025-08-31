@@ -64,7 +64,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as z from "zod";
 import useConfirmModal from "@/hooks/useConfirmModal";
 import ConfirmModal from "@/components/modal/ConfirmModal";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -95,7 +95,7 @@ const formSchema = z.object({
   districtId: z.string().min(1, "District is required"),
   groupIds: z.array(z.string()).optional(),
   branchId: z.string().min(1, "Branch is required"),
-  memberCode: z.string().optional(),
+  memberCode: z.string().length(4, "Member code must be exactly 4 digits").regex(/^\d{4}$/, "Member code must be 4 digits"),
   role: z.enum(["President", "Secretary", "Accountant", "Member"], {
     required_error: "Role is required",
   }),
@@ -270,31 +270,23 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
     }
   }, [form.watch("branchId"), refetchGroups]);
 
-  // Set default member code
-  useEffect(() => {
-    form.setValue("memberCode", "1234");
-  }, [form]);
-
   async function onSubmit(values: z.infer<typeof formSchema>) {
     // Only enforce for leader roles
     const leaderRoles = ["President", "Secretary", "Accountant"];
     if (leaderRoles.includes(values.role) && values.groupIds && values.groupIds.length > 0) {
       try {
-        // Check for each group if the role is already taken
+        // Check for each group if the leader role is already assigned in the group entity
         const conflicts = [];
         for (const groupId of values.groupIds) {
-          // Fetch members of the group
-          const { data } = await api.get(`/groups/${groupId}/members`, {
-            params: {
-              filters: [
-                { field: "role", operator: "eq", value: values.role },
-              ],
-            },
-          });
-          // If any member found with the same role and not the current record, it's a conflict
-          const taken = data.results?.find((m) => !record || m.id !== record.id);
-          if (taken) {
-            conflicts.push(taken.group?.name || groupId);
+          // Fetch group details
+          const { data } = await api.get(`/groups/${groupId}`);
+          let leaderId = null;
+          if (values.role === "President") leaderId = data.president?.id;
+          if (values.role === "Secretary") leaderId = data.secretary?.id;
+          if (values.role === "Accountant") leaderId = data.accountant?.id;
+          // If leader is set and not the current record, it's a conflict
+          if (leaderId && (!record || leaderId !== record.id)) {
+            conflicts.push(data.name || groupId);
           }
         }
         if (conflicts.length > 0) {
@@ -372,8 +364,6 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                           <FormControl>
                             <Input
                               placeholder="e.g. 1234"
-                              defaultValue="1234"
-                              readOnly
                               error={fieldState?.error?.message}
                               maxLength={4}
                               pattern="\d{4}"
@@ -423,7 +413,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                       name="branchId"
                       render={({ field, fieldState }) => (
                         <FormItem>
-                          <FormLabel>Sector</FormLabel>
+                          <FormLabel>Zone</FormLabel>
                           <FormControl>
                             <Select
                               onValueChange={field.onChange}
@@ -432,7 +422,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                             >
                               <FormControl>
                                 <SelectTrigger error={fieldState?.error?.message}>
-                                  <SelectValue placeholder="Select sector" />
+                                  <SelectValue placeholder="Select zone" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -794,8 +784,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
 
               </div>
             </ScrollArea>
-
-            <SheetFooter className="mt-auto border-t px-3 py-2.5">
+            <div className="mt-auto border-t px-3 py-2.5 flex gap-2 justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -817,7 +806,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                 )}
                 {record ? "Update Member" : "Add Member"}
               </Button>
-            </SheetFooter>
+            </div>
           </form>
         </Form>
       </SheetContent>
@@ -973,7 +962,8 @@ export default function Members() {
           branch: e?.branch?.name,
           group: e?.group?.name,
           createdAt: e?.createdAt,
-          // Keep the relations for delete check
+          // Use leaderRoles from backend for correct display
+          leaderRoles: e?.leaderRoles || [],
           groupMemberships: e?.groupMemberships || [],
           contributions: e?.contributions || [],
           loans: e?.loans || [],
@@ -1077,11 +1067,9 @@ export default function Members() {
       ),
       cell: ({ row }) => {
         const leaderRoles = row.original.leaderRoles || [];
-
         if (leaderRoles.length === 0) {
           return <span className="text-muted-foreground text-sm">Member</span>;
         }
-
         return (
           <div className="flex flex-wrap gap-1">
             {leaderRoles.map((leaderRole, index) => (
@@ -1268,12 +1256,14 @@ export default function Members() {
                         disabled={
                           row.original.groupMemberships?.length > 0 ||
                           row.original.contributions?.length > 0 ||
-                          row.original.loans?.length > 0
+                          row.original.loans?.length > 0 ||
+                          row.original.currentSavings !== 0
                         }
                         className={
                           row.original.groupMemberships?.length > 0 ||
                             row.original.contributions?.length > 0 ||
-                            row.original.loans?.length > 0
+                            row.original.loans?.length > 0 ||
+                            row.original.currentSavings !== 0
                             ? "opacity-50 cursor-not-allowed"
                             : ""
                         }
@@ -1283,9 +1273,10 @@ export default function Members() {
                     </TooltipTrigger>
                     {(row.original.groupMemberships?.length > 0 ||
                       row.original.contributions?.length > 0 ||
-                      row.original.loans?.length > 0) && (
+                      row.original.loans?.length > 0 ||
+                      row.original.currentSavings !== 0) && (
                         <TooltipContent>
-                          <p>Cannot delete member with active group memberships, contributions, or loans</p>
+                          <p>Cannot delete member with active group memberships, contributions, loans, or non-zero savings</p>
                         </TooltipContent>
                       )}
                   </Tooltip>
@@ -1322,6 +1313,81 @@ export default function Members() {
 
   return (
     <>
+      <div className="flex justify-end mb-4">
+        <Button
+          variant="outline"
+          onClick={async () => {
+            // Dynamically import jsPDF and html2canvas
+            const jsPDF = (await import('jspdf')).jsPDF;
+            const html2canvas = (await import('html2canvas')).default;
+            // Create a hidden div for PDF content
+            const pdfDiv = document.createElement('div');
+            pdfDiv.style.position = 'fixed';
+            pdfDiv.style.left = '-9999px';
+            pdfDiv.style.top = '0';
+            pdfDiv.style.width = '900px';
+            pdfDiv.style.background = '#fff';
+            pdfDiv.style.fontFamily = 'Arial, sans-serif';
+            pdfDiv.innerHTML = `
+              <div style="padding:32px;">
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
+                  <span>${new Date().toLocaleString()}</span>
+                  <span>ikimina management system.</span>
+                </div>
+                <div style="text-align:center;margin-bottom:8px;font-size:16px;font-weight:600;">ikimina | Members Report</div>
+                <div style="text-align:center;margin-bottom:16px;font-size:22px;font-weight:bold;">MEMBERS LIST</div>
+                <hr style="margin-bottom:16px;" />
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                  <thead>
+                    <tr style="background:#f5f5f5;">
+                      <th style="border:1px solid #ddd;padding:6px;">ID</th>
+                      <th style="border:1px solid #ddd;padding:6px;">Member</th>
+                      <th style="border:1px solid #ddd;padding:6px;">Leader Roles</th>
+                      <th style="border:1px solid #ddd;padding:6px;">Phone</th>
+                      <th style="border:1px solid #ddd;padding:6px;">Zone</th>
+                      <th style="border:1px solid #ddd;padding:6px;">Groups</th>
+                      <th style="border:1px solid #ddd;padding:6px;">Current Savings</th>
+                      <th style="border:1px solid #ddd;padding:6px;">Marriage Status</th>
+                      <th style="border:1px solid #ddd;padding:6px;">Source of Income</th>
+                      <th style="border:1px solid #ddd;padding:6px;">Country</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${(recordsQuery.data?.items || []).map(m => `
+                      <tr>
+                        <td style="border:1px solid #ddd;padding:6px;">${m.id}</td>
+                        <td style="border:1px solid #ddd;padding:6px;">${m.fullNames}</td>
+                        <td style="border:1px solid #ddd;padding:6px;">${m.role}</td>
+                        <td style="border:1px solid #ddd;padding:6px;">${m.phone}</td>
+                        <td style="border:1px solid #ddd;padding:6px;">${m.branch?.name || ''}</td>
+                        <td style="border:1px solid #ddd;padding:6px;">${(m.groups || []).map(g => g.name).join('; ')}</td>
+                        <td style="border:1px solid #ddd;padding:6px;">${m.currentSavings} FRW</td>
+                        <td style="border:1px solid #ddd;padding:6px;">${m.marriageStatus}</td>
+                        <td style="border:1px solid #ddd;padding:6px;">${m.sourceOfIncome}</td>
+                        <td style="border:1px solid #ddd;padding:6px;">${m.country}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+                <div style="margin-top:24px;display:flex;justify-content:space-between;font-size:14px;">
+                  <div><b>Total Members:</b> ${(recordsQuery.data?.items || []).length}</div>
+                  <div><b>Generated on</b> ${new Date().toLocaleString()}</div>
+                </div>
+              </div>
+            `;
+            document.body.appendChild(pdfDiv);
+            // Use html2canvas to render the div
+            const canvas = await html2canvas(pdfDiv, { scale: 2 });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [canvas.width, canvas.height] });
+            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.save('members_report.pdf');
+            document.body.removeChild(pdfDiv);
+          }}
+        >
+          Download Members Report
+        </Button>
+      </div>
       <ConfirmModal
         title={"Are you sure you want to delete?"}
         description={`This will permanently delete the member and cannot be undone. Note: Members with group memberships, contributions, or loans cannot be deleted.`}
@@ -1593,6 +1659,79 @@ export default function Members() {
                 />
               </PopoverContent>
             </Popover>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                // Dynamically import jsPDF and html2canvas
+                const jsPDF = (await import('jspdf')).jsPDF;
+                const html2canvas = (await import('html2canvas')).default;
+                // Create a hidden div for PDF content
+                const pdfDiv = document.createElement('div');
+                pdfDiv.style.position = 'fixed';
+                pdfDiv.style.left = '-9999px';
+                pdfDiv.style.top = '0';
+                pdfDiv.style.width = '900px';
+                pdfDiv.style.background = '#fff';
+                pdfDiv.style.fontFamily = 'Arial, sans-serif';
+                pdfDiv.innerHTML = `
+                  <div style="padding:32px;">
+                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
+                      <span>${new Date().toLocaleString()}</span>
+                      <span>ikimina management system.</span>
+                    </div>
+                    <div style="text-align:center;margin-bottom:8px;font-size:16px;font-weight:600;">ikimina | Members Report</div>
+                    <div style="text-align:center;margin-bottom:16px;font-size:22px;font-weight:bold;">MEMBERS LIST</div>
+                    <hr style="margin-bottom:16px;" />
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                      <thead>
+                        <tr style="background:#f5f5f5;">
+                          <th style="border:1px solid #ddd;padding:6px;">ID</th>
+                          <th style="border:1px solid #ddd;padding:6px;">Member</th>
+                          <th style="border:1px solid #ddd;padding:6px;">Leader Roles</th>
+                          <th style="border:1px solid #ddd;padding:6px;">Phone</th>
+                          <th style="border:1px solid #ddd;padding:6px;">Zone</th>
+                          <th style="border:1px solid #ddd;padding:6px;">Groups</th>
+                          <th style="border:1px solid #ddd;padding:6px;">Current Savings</th>
+                          <th style="border:1px solid #ddd;padding:6px;">Marriage Status</th>
+                          <th style="border:1px solid #ddd;padding:6px;">Source of Income</th>
+                          <th style="border:1px solid #ddd;padding:6px;">Country</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${(recordsQuery.data?.items || []).map(m => `
+                          <tr>
+                            <td style="border:1px solid #ddd;padding:6px;">${m.id}</td>
+                            <td style="border:1px solid #ddd;padding:6px;">${m.fullNames}</td>
+                            <td style="border:1px solid #ddd;padding:6px;">${m.role}</td>
+                            <td style="border:1px solid #ddd;padding:6px;">${m.phone}</td>
+                            <td style="border:1px solid #ddd;padding:6px;">${m.branch?.name || ''}</td>
+                            <td style="border:1px solid #ddd;padding:6px;">${(m.groups || []).map(g => g.name).join('; ')}</td>
+                            <td style="border:1px solid #ddd;padding:6px;">${m.currentSavings} FRW</td>
+                            <td style="border:1px solid #ddd;padding:6px;">${m.marriageStatus}</td>
+                            <td style="border:1px solid #ddd;padding:6px;">${m.sourceOfIncome}</td>
+                            <td style="border:1px solid #ddd;padding:6px;">${m.country}</td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                    <div style="margin-top:24px;display:flex;justify-content:space-between;font-size:14px;">
+                      <div><b>Total Members:</b> ${(recordsQuery.data?.items || []).length}</div>
+                      <div><b>Generated on</b> ${new Date().toLocaleString()}</div>
+                    </div>
+                  </div>
+                `;
+                document.body.appendChild(pdfDiv);
+                // Use html2canvas to render the div
+                const canvas = await html2canvas(pdfDiv, { scale: 2 });
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [canvas.width, canvas.height] });
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                pdf.save('members_report.pdf');
+                document.body.removeChild(pdfDiv);
+              }}
+            >
+              Download Members Report
+            </Button>
             {(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary") && (
               <Button onClick={() => newRecordModal.open()}>
                 <PlusCircle size={16} className="mr-2" />

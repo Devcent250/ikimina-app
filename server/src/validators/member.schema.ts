@@ -16,14 +16,17 @@ export const createMemberSchema = Joi.object({
   sourceOfIncome: Joi.string()
     .valid("Employment", "Business", "Farming", "Freelance", "Other")
     .required(),
-  branchId: Joi.alternatives().try(Joi.number(), Joi.string().pattern(/^\d+$/)).required(),
-  districtId: Joi.alternatives().try(Joi.number(), Joi.string().pattern(/^\d+$/)).required(),
+  branchId: Joi.alternatives().try(Joi.number(), Joi.string().pattern(/^[\d]+$/)).required(),
+  districtId: Joi.alternatives().try(Joi.number(), Joi.string().pattern(/^[\d]+$/)).required(),
   memberCode: Joi.string().length(4).pattern(/^\d{4}$/).required().messages({
     'string.length': 'Member code must be exactly 4 characters',
     'string.pattern.base': 'Member code must contain only digits',
     'any.required': 'Member code is required'
   }),
-  groupIds: Joi.array().items(Joi.string()).optional().allow(null).default([])
+  groupIds: Joi.array().items(Joi.string()).optional().allow(null).default([]),
+  role: Joi.string().valid("President", "Secretary", "Accountant", "Member").optional(),
+  email: Joi.string().email().optional().allow(null).allow(""),
+  password: Joi.string().min(6).optional().allow(null).allow("")
 });
 
 export const updateMemberSchema = createMemberSchema.fork(
@@ -42,6 +45,9 @@ export const updateMemberSchema = createMemberSchema.fork(
     "branchId",
     "memberCode",
     "groupIds",
+    "role",
+    "email",
+    "password"
   ],
   (schema) => schema.optional()
 );

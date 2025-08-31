@@ -27,11 +27,14 @@ export class ContributionController {
       maxLimit: 100,
       defaultSortBy: "createdAt",
       defaultOrder: "DESC",
-      // Don't use dot notation in searchableFields
-      searchableFields: [], // We'll handle search separately
+      searchableFields: [
+        "member.firstName",
+        "member.lastName",
+        "group.name"
+      ],
       allowedSortFields: ["createdAt", "updatedAt", "depositAmount"],
       filterableFields: [
-        "member", // Keep this simple without dot notation
+        "member",
         "group",
         "paymentMethod",
         "receivedBy",
@@ -60,7 +63,26 @@ export class ContributionController {
 
   private format = (contribution: Contribution) => {
     return {
-      ...contribution,
+      id: contribution.id,
+      depositAmount: contribution.depositAmount,
+      solidarityAmount: contribution.solidarityAmount,
+      totalAmount: Number(contribution.depositAmount || 0) + Number(contribution.solidarityAmount || 0),
+      currentSavingAmount: contribution.currentSavingAmount,
+      currentSolidalityAmount: contribution.currentSolidalityAmount,
+      beforeSavingAmount: contribution.beforeSavingAmount,
+      beforeSolidalityAmount: contribution.beforeSolidalityAmount,
+      member: contribution.member,
+      groupMember: contribution.groupMember,
+      season: contribution.season,
+      group: contribution.group,
+      paymentMethod: contribution.paymentMethod,
+      receivedBy: contribution.receivedBy,
+      branch: contribution.branch,
+      documentReceipt: contribution.documentReceipt,
+      transactionId: contribution.transactionId,
+      createdAt: contribution.createdAt,
+      updatedAt: contribution.updatedAt,
+      fines: contribution.fines,
     };
   };
 
@@ -384,13 +406,13 @@ export class ContributionController {
         }
         // *** END OF NEW CODE ***
 
-        // Handle search specifically for member names
+        // Instant substring search: match any substring in member/group fields
         if (params.search) {
+          const searchText = params.search.trim();
           customConditions.push({
-            where: `(member.firstName ILIKE :search OR member.lastName ILIKE :search)`,
-            parameters: { search: `%${params.search}%` }
+            where: `"member"."firstName" ILIKE :search OR "member"."lastName" ILIKE :search OR "group"."name" ILIKE :search`,
+            parameters: { search: `%${searchText}%` }
           });
-          // Remove the search parameter since we're handling it manually
           delete params.search;
         }
 
@@ -410,11 +432,11 @@ export class ContributionController {
             customJoins
           );
 
-          console.log(`Found ${result.results?.length || 0} contributions`);
-
+          const formattedResults = result.results?.map(this.format) || [];
+          console.log('Formatted contributions:', JSON.stringify(formattedResults, null, 2));
           res.json({
             ...result,
-            results: result.results?.map(this.format) || []
+            results: formattedResults
           });
         } catch (error) {
           console.error("Query execution error:", error);
