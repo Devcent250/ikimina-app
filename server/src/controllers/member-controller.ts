@@ -41,6 +41,47 @@ export class MemberController {
     });
   }
 
+  // Helper to ensure leader credentials and user record
+  private async ensureLeaderCredentials(member: Member, email?: string, password?: string) {
+    const { User } = await import("../entities/User");
+    const userRepository = AppDataSource.getRepository(User);
+    const bcrypt = require('bcrypt');
+    // If no credentials provided, check if member already has them
+    if (!email || !password) {
+      if (member.email && member.password) {
+        return; // Member already has credentials, no need to update
+      } else {
+        throw new Error("Email and password are required for leaders who do not have credentials.");
+      }
+    }
+    // Update member credentials
+    member.email = email;
+    member.password = await bcrypt.hash(password, 10);
+    await this.repository.save(member);
+    // Ensure user record exists/updated
+    let user = await userRepository.findOne({ where: { email } });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    if (!user) {
+      user = userRepository.create({
+        name: member.fullNames,
+        first_name: member.firstName,
+        last_name: member.lastName,
+        email,
+        password: hashedPassword,
+        status: "active",
+        isAdmin: false,
+        branch: member.branch,
+      });
+    } else {
+      user.password = hashedPassword;
+      user.name = member.fullNames;
+      user.first_name = member.firstName;
+      user.last_name = member.lastName;
+      user.status = "active";
+    }
+    await userRepository.save(user);
+  }
+
   private format = async (member: Member) => {
     // Calculate current savings from contributions
     const currentSavings = member.contributions
@@ -153,6 +194,19 @@ export class MemberController {
         // Filter out any empty strings
         const validGroupIds = groupIds.filter(id => id && id.trim() !== "");
 
+        // If assigning a leader role, require email and password
+        const leaderRoles = ["President", "Secretary", "Accountant"];
+        if (req.body.role && leaderRoles.includes(req.body.role)) {
+          if (!req.body.email || !req.body.password) {
+            return next(new BadRequestError("Email and password are required for group leaders.", {
+              errors: {
+                email: "Email is required for group leaders.",
+                password: "Password is required for group leaders."
+              }
+            }));
+          }
+        }
+
         // Create group memberships one by one to isolate any issues
         for (const groupId of validGroupIds) {
           try {
@@ -170,7 +224,6 @@ export class MemberController {
             await this.groupMemberRepository.save(groupMembership);
 
             // If role is provided and is a leader role, update the group entity and ensure credentials
-            const leaderRoles = ["President", "Secretary", "Accountant"];
             if (req.body.role && leaderRoles.includes(req.body.role)) {
               const groupRepo = AppDataSource.getRepository(require("../entities/Group").Group);
               const group = await groupRepo.findOne({ where: { id: parseInt(groupId) } });
@@ -179,13 +232,8 @@ export class MemberController {
                 if (req.body.role === "Secretary") group.secretary = savedMember;
                 if (req.body.role === "Accountant") group.accountant = savedMember;
 
-                // Ensure credentials for leader
-                if (req.body.email && req.body.password) {
-                  savedMember.email = req.body.email;
-                  const bcrypt = require('bcrypt');
-                  savedMember.password = await bcrypt.hash(req.body.password, 10);
-                  await this.repository.save(savedMember);
-                }
+                // Ensure credentials for leader and create system user
+                await this.ensureLeaderCredentials(savedMember, req.body.email, req.body.password);
 
                 await groupRepo.save(group);
               }
@@ -331,6 +379,14 @@ export class MemberController {
         // Assign leader role for all selected groups if role is provided and is a leader role
         const leaderRoles = ["President", "Secretary", "Accountant"];
         if (memberData.role && leaderRoles.includes(memberData.role)) {
+          if (!memberData.email || !memberData.password) {
+            return next(new BadRequestError("Email and password are required for group leaders.", {
+              errors: {
+                email: "Email is required for group leaders.",
+                password: "Password is required for group leaders."
+              }
+            }));
+          }
           const groupRepo = AppDataSource.getRepository(require("../entities/Group").Group);
           for (const groupId of groupIds) {
             if (!groupId || isNaN(parseInt(groupId))) continue;
@@ -339,6 +395,8 @@ export class MemberController {
               if (memberData.role === "President") group.president = updatedMember;
               if (memberData.role === "Secretary") group.secretary = updatedMember;
               if (memberData.role === "Accountant") group.accountant = updatedMember;
+              // Ensure credentials for leader and create system user
+              await this.ensureLeaderCredentials(updatedMember, memberData.email, memberData.password);
               await groupRepo.save(group);
             }
           }
