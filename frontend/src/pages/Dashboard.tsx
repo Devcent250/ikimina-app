@@ -306,7 +306,7 @@ export default function DashboardOverview() {
                   {status === "loading" ? (
                     <Skeleton className="h-8 w-[100px]" />
                   ) : (
-                    analytics?.repaymentRate + "%"
+                    Number(analytics?.repaymentRate).toFixed(2) + "%"
                   )}
                 </div>
                 <div className="flex items-center text-xs text-muted-foreground mt-1">
@@ -422,7 +422,7 @@ export default function DashboardOverview() {
               >
                 <ScrollArea className="w-full rounded-lg border-r border-l whitespace-nowrap">
                   <TabsList>
-                    <TabsTrigger value="all">All Zones</TabsTrigger>
+                    <TabsTrigger value="all">All Sectors</TabsTrigger>
                     {branches?.map((e) => (
                       <TabsTrigger value={e.id}>{e.name}</TabsTrigger>
                     ))}

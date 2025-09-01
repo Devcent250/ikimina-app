@@ -67,6 +67,7 @@ import ConfirmModal from "@/components/modal/ConfirmModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import BulkImport from "@/components/modal/BulkImport";
 
 const formSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
@@ -413,7 +414,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                       name="branchId"
                       render={({ field, fieldState }) => (
                         <FormItem>
-                          <FormLabel>Zone</FormLabel>
+                          <FormLabel>Sector</FormLabel>
                           <FormControl>
                             <Select
                               onValueChange={field.onChange}
@@ -422,7 +423,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                             >
                               <FormControl>
                                 <SelectTrigger error={fieldState?.error?.message}>
-                                  <SelectValue placeholder="Select zone" />
+                                  <SelectValue placeholder="Select sector" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -841,6 +842,20 @@ export default function Members() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const { user } = useAuth();
   const canPerformActions = canPerformAdminActions(user);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  // Sample row for template download
+  const sampleMember = [{
+    "Member Code": "4488",
+    "Member Name": "BAHATI Innocent",
+    "Leader Role": "member",
+    "Phone": "079958348",
+    "Sector": "Rubavu",
+    "Group": "Twisungane",
+    "Current Savings": "5000 FRW",
+    "Marital Status": "Single",
+    "Source of Income": "Business",
+    "Country": "Rwanda"
+  }];
 
   // Add separate queries for filter options
   const { data: branches = [] } = useQuery(["branches"], async () => {
@@ -1313,81 +1328,7 @@ export default function Members() {
 
   return (
     <>
-      <div className="flex justify-end mb-4">
-        <Button
-          variant="outline"
-          onClick={async () => {
-            // Dynamically import jsPDF and html2canvas
-            const jsPDF = (await import('jspdf')).jsPDF;
-            const html2canvas = (await import('html2canvas')).default;
-            // Create a hidden div for PDF content
-            const pdfDiv = document.createElement('div');
-            pdfDiv.style.position = 'fixed';
-            pdfDiv.style.left = '-9999px';
-            pdfDiv.style.top = '0';
-            pdfDiv.style.width = '900px';
-            pdfDiv.style.background = '#fff';
-            pdfDiv.style.fontFamily = 'Arial, sans-serif';
-            pdfDiv.innerHTML = `
-              <div style="padding:32px;">
-                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
-                  <span>${new Date().toLocaleString()}</span>
-                  <span>ikimina management system.</span>
-                </div>
-                <div style="text-align:center;margin-bottom:8px;font-size:16px;font-weight:600;">ikimina | Members Report</div>
-                <div style="text-align:center;margin-bottom:16px;font-size:22px;font-weight:bold;">MEMBERS LIST</div>
-                <hr style="margin-bottom:16px;" />
-                <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                  <thead>
-                    <tr style="background:#f5f5f5;">
-                      <th style="border:1px solid #ddd;padding:6px;">ID</th>
-                      <th style="border:1px solid #ddd;padding:6px;">Member</th>
-                      <th style="border:1px solid #ddd;padding:6px;">Leader Roles</th>
-                      <th style="border:1px solid #ddd;padding:6px;">Phone</th>
-                      <th style="border:1px solid #ddd;padding:6px;">Zone</th>
-                      <th style="border:1px solid #ddd;padding:6px;">Groups</th>
-                      <th style="border:1px solid #ddd;padding:6px;">Current Savings</th>
-                      <th style="border:1px solid #ddd;padding:6px;">Marriage Status</th>
-                      <th style="border:1px solid #ddd;padding:6px;">Source of Income</th>
-                      <th style="border:1px solid #ddd;padding:6px;">Country</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${(recordsQuery.data?.items || []).map(m => `
-                      <tr>
-                        <td style="border:1px solid #ddd;padding:6px;">${m.id}</td>
-                        <td style="border:1px solid #ddd;padding:6px;">${m.fullNames}</td>
-                        <td style="border:1px solid #ddd;padding:6px;">${m.role}</td>
-                        <td style="border:1px solid #ddd;padding:6px;">${m.phone}</td>
-                        <td style="border:1px solid #ddd;padding:6px;">${m.branch?.name || ''}</td>
-                        <td style="border:1px solid #ddd;padding:6px;">${(m.groups || []).map(g => g.name).join('; ')}</td>
-                        <td style="border:1px solid #ddd;padding:6px;">${m.currentSavings} FRW</td>
-                        <td style="border:1px solid #ddd;padding:6px;">${m.marriageStatus}</td>
-                        <td style="border:1px solid #ddd;padding:6px;">${m.sourceOfIncome}</td>
-                        <td style="border:1px solid #ddd;padding:6px;">${m.country}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-                <div style="margin-top:24px;display:flex;justify-content:space-between;font-size:14px;">
-                  <div><b>Total Members:</b> ${(recordsQuery.data?.items || []).length}</div>
-                  <div><b>Generated on</b> ${new Date().toLocaleString()}</div>
-                </div>
-              </div>
-            `;
-            document.body.appendChild(pdfDiv);
-            // Use html2canvas to render the div
-            const canvas = await html2canvas(pdfDiv, { scale: 2 });
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [canvas.width, canvas.height] });
-            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-            pdf.save('members_report.pdf');
-            document.body.removeChild(pdfDiv);
-          }}
-        >
-          Download Members Report
-        </Button>
-      </div>
+
       <ConfirmModal
         title={"Are you sure you want to delete?"}
         description={`This will permanently delete the member and cannot be undone. Note: Members with group memberships, contributions, or loans cannot be deleted.`}
@@ -1525,39 +1466,7 @@ export default function Members() {
                             <div key={membership.id} className="bg-card border rounded-lg p-3">
                               <div className="flex items-center justify-between mb-2">
                                 <h4 className="font-medium">{membership.group.name}</h4>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant={membership.loanEligibility ? "default" : "secondary"} className="text-xs">
-                                    {membership.loanEligibility ? "Eligible" : "Not Eligible"}
-                                  </Badge>
-                                  {canPerformActions && (
-                                    <Switch
-                                      checked={membership.loanEligibility}
-                                      onCheckedChange={async (checked) => {
-                                        const branchId = membership.branch?.id || membership.group?.branch?.id || memberDetailsQuery.data?.branch?.id;
-                                        // Only send the fields we want to update
-                                        const payload = {
-                                          loanEligibility: checked,
-                                          branchId,
-                                        };
-
-                                        console.log("PATCH payload:", payload);
-                                        console.log("Membership data:", membership);
-                                        if (!branchId) {
-                                          console.error("Missing branchId for membership:", membership);
-                                          console.error("Member data:", memberDetailsQuery.data);
-                                          alert("No branchId found for this group member. Please check your data. This might be a data inconsistency issue.");
-                                          return;
-                                        }
-                                        try {
-                                          await api.patch(`/groups/${membership.group.id}/members/${membership.id}`, payload);
-                                          memberDetailsQuery.refetch();
-                                        } catch (e) {
-                                          alert(e?.response?.data?.message || e.message || "Failed to update eligibility");
-                                        }
-                                      }}
-                                    />
-                                  )}
-                                </div>
+                                {/* Removed loan eligibility toggle and badge */}
                               </div>
                               <div className="grid grid-cols-3 gap-2 text-xs">
                                 <div>
@@ -1593,11 +1502,11 @@ export default function Members() {
                         <h3 className="text-sm font-semibold mb-3 pb-1 border-b">Branch Information</h3>
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Zone Name:</span>
+                            <span className="text-muted-foreground">Sectore Name:</span>
                             <span className="font-medium">{memberDetailsQuery.data.branch?.name}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Zone Address:</span>
+                            <span className="text-muted-foreground">Sector Address:</span>
                             <span className="font-medium">{memberDetailsQuery.data.branch?.address}</span>
                           </div>
                         </div>
@@ -1689,7 +1598,7 @@ export default function Members() {
                           <th style="border:1px solid #ddd;padding:6px;">Member</th>
                           <th style="border:1px solid #ddd;padding:6px;">Leader Roles</th>
                           <th style="border:1px solid #ddd;padding:6px;">Phone</th>
-                          <th style="border:1px solid #ddd;padding:6px;">Zone</th>
+                          <th style="border:1px solid #ddd;padding:6px;">Sector</th>
                           <th style="border:1px solid #ddd;padding:6px;">Groups</th>
                           <th style="border:1px solid #ddd;padding:6px;">Current Savings</th>
                           <th style="border:1px solid #ddd;padding:6px;">Marriage Status</th>
@@ -1733,10 +1642,15 @@ export default function Members() {
               Download Members Report
             </Button>
             {(user?.isAdmin || user?.role?.name === "President" || user?.role?.name === "Accountant" || user?.role?.name === "Secretary") && (
-              <Button onClick={() => newRecordModal.open()}>
-                <PlusCircle size={16} className="mr-2" />
-                Add Member
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setBulkImportOpen(true)}>
+                  Bulk Upload Members
+                </Button>
+                <Button onClick={() => newRecordModal.open()}>
+                  <PlusCircle size={16} className="mr-2" />
+                  Add Member
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -1748,7 +1662,7 @@ export default function Members() {
           facets={[
             {
               name: "branch",
-              title: "Zone",
+              title: "Sector",
               type: "select",
               options: branches,
             },
@@ -1796,6 +1710,18 @@ export default function Members() {
         }}
         refetch={recordsQuery.refetch}
         record={recordToEdit}
+      />
+      {/* Place Bulk Upload Members button on the main actions row, next to Add Member */}
+      {/* Removed duplicate Bulk Upload Members button below the table */}
+      <BulkImport
+        open={bulkImportOpen}
+        setOpen={setBulkImportOpen}
+        sample={sampleMember}
+        name="members"
+        endPoint="/members/import"
+        onComplete={() => {
+          window.location.reload();
+        }}
       />
     </>
   );

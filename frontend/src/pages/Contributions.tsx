@@ -704,7 +704,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                   {selectedGroup?.pricePerShare > 0 && (
                     <div className="flex justify-between">
                       <span>Shares:</span>
-                      <span className="text-primary">{numberOfShares} x {selectedGroup.pricePerShare} FRW</span>
+                      <span className="text-primary">{numberOfShares}</span>
                     </div>
                   )}
                 </div>
@@ -716,7 +716,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                 name="branchId"
                 render={({ field, fieldState }) => (
                   <FormItem>
-                    <FormLabel>Zone</FormLabel>
+                    <FormLabel>Sector</FormLabel>
                     <FormControl>
                       <Select
                         disabled={Boolean(selectedMember)}
@@ -731,7 +731,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                       >
                         <FormControl>
                           <SelectTrigger error={fieldState?.error?.message}>
-                            <SelectValue placeholder="Select Zone" />
+                            <SelectValue placeholder="Select Sector" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>

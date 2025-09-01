@@ -57,6 +57,7 @@ import { useAuth } from "@/context/auth.context";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+// Removed loan eligibility import
 
 const formSchema = z.object({
   amount: z.number().min(0, "Amount must be a positive number"),
@@ -80,6 +81,24 @@ const loanCategorySchema = z.object({
 });
 
 function LoanForm({ isOpen, setIsOpen, refetch, record }) {
+  // Auto-fill and show allowed amount for 'Contribution x3' loan type
+  const [allowedAmount, setAllowedAmount] = useState<number | null>(null);
+
+  async function handleLoanTypeChange(loanTypeId: number) {
+    const selected = loanCategories?.find(cat => Number(cat.id) === Number(loanTypeId));
+    field.onChange(loanTypeId);
+    if (selected && selected.name === "Contribution x3" && form.watch("groupMemberId")) {
+      const allowed = await fetchAllowedLoanAmount(form.watch("groupMemberId"));
+      setAllowedAmount(allowed);
+      form.setValue("amount", allowed);
+    } else {
+      setAllowedAmount(null);
+    }
+  }
+  // Auto-fill amount when member is selected
+
+
+  // Removed loan eligibility logic
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     values: record
@@ -115,15 +134,7 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
     return data?.data?.results || data?.data || [];
   });
 
-  // Function to auto-fill amount and interest rate based on selected loan category
-  const handleLoanTypeChange = (loanTypeId) => {
-    const selected = loanCategories?.find(cat => Number(cat.id) === Number(loanTypeId));
-    console.log('Selected loan category:', selected);
-    if (selected) {
-      form.setValue("amount", Number(selected.defaultAmount) || 0);
-      form.setValue("interestRate", Number(selected.interestRate) || 0);
-    }
-  };
+  // Removed auto-fill for amount and interest rate. User must enter manually.
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     // Find the selected category by ID
@@ -234,11 +245,7 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                           <FormLabel>Loan Type </FormLabel>
                           < FormControl >
                             <Select
-                              onValueChange={value => {
-                                const numValue = Number(value);
-                                field.onChange(numValue);
-                                handleLoanTypeChange(numValue);
-                              }}
+                              onValueChange={val => handleLoanTypeChange(Number(val))}
                               value={field.value !== undefined ? String(field.value) : undefined}
                               disabled={loadingCategories}
                             >
@@ -273,16 +280,21 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                     render={({ field, fieldState }) => (
                       <FormItem>
                         <FormLabel>Amount</FormLabel>
-                        < FormControl >
+                        <FormControl>
                           <Input
                             type="number"
                             placeholder="Enter Loan Amount"
                             error={fieldState?.error?.message}
-                            disabled={Boolean(form.watch("loanType"))}
+                            disabled={Boolean(form.watch("loanType")) && form.watch("amount") > 0}
                             {...field}
                             onChange={e => field.onChange(Number(e.target.value))}
                           />
                         </FormControl>
+                        {allowedAmount !== null && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            Allowed amount for this member: {allowedAmount.toLocaleString()} FRW
+                          </div>
+                        )}
                       </FormItem>
                     )}
                   />
@@ -401,7 +413,7 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                     render={({ field, fieldState }) => (
                       <FormItem>
                         <FormLabel>Member </FormLabel>
-                        < SearchSelect
+                        <SearchSelect
                           disabled={!form.getValues("groupId")}
                           error={fieldState?.error?.message}
                           options={
@@ -413,7 +425,7 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                             })
                           }
                           value={field.value}
-                          setValue={value => field.onChange(Number(value))}
+                          setValue={field.onChange}
                           placeholder={"Select member"}
                         />
                         <FormMessage />

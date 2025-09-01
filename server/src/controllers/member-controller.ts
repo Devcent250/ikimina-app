@@ -617,6 +617,106 @@ export class MemberController {
   );
 
   import = asyncHandler(
-    async (req: Request, res: Response, next: NextFunction) => { }
+    async (req: Request, res: Response, next: NextFunction) => {
+      let finished = false;
+      // Set a 10 second timeout
+      const timeout = setTimeout(() => {
+        if (!finished) {
+          finished = true;
+          return res.status(503).json({
+            status: "error",
+            message: "Import is taking too long. Please check your file format or server logs for errors."
+          });
+        }
+      }, 10000);
+      try {
+        const file = req.file;
+        if (!file) {
+          return next(new BadRequestError("No file uploaded"));
+        }
+        const path = require('path');
+        const fs = require('fs');
+        const xlsx = require('xlsx');
+        const ext = path.extname(file.originalname).toLowerCase();
+        let rows = [];
+        if (ext === '.csv') {
+          const csv = fs.readFileSync(file.path, 'utf8');
+          const [headerLine, ...lines] = csv.split(/\r?\n/).filter(Boolean);
+          const headers = headerLine.split(',');
+          rows = lines.map(line => {
+            const values = line.split(',');
+            const obj = {};
+            headers.forEach((h, i) => { obj[h.trim()] = values[i]?.trim() || ''; });
+            return obj;
+          });
+        } else {
+          const workbook = xlsx.readFile(file.path);
+          const sheetName = workbook.SheetNames[0];
+          rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        }
+
+        if (!rows.length) {
+          return next(new BadRequestError("No data found in file"));
+        }
+
+        // Validate and insert members
+        const inserted = [];
+        const errors = [];
+        for (const [i, row] of rows.entries()) {
+          // Map CSV/Excel columns to member fields
+          const memberData = {
+            memberCode: row["Member Code"] || undefined,
+            fullNames: row["Member Name"] || undefined,
+            firstName: row["First Name"] || (row["Member Name"] ? row["Member Name"].split(' ')[0] : undefined),
+            lastName: row["Last Name"] || (row["Member Name"] ? row["Member Name"].split(' ').slice(1).join(' ') : undefined),
+            role: row["Leader Role"] || "Member",
+            phone: row["Phone"] || undefined,
+            marriageStatus: row["Marital Status"] || "Single",
+            sourceOfIncome: row["Source of Income"] || "Employment",
+            country: row["Country"] || "Rwanda",
+            idNumber: row["ID Number"] || `AUTO${Date.now()}${i}`,
+            gender: row["Gender"] || "Other",
+            currentAddress: row["Current Address"] || "",
+            joinedAt: row["Joined At"] || new Date(),
+            branchId: row["Branch ID"] || 1,
+            districtId: row["District ID"] || 1,
+            groupIds: row["Group IDs"] ? row["Group IDs"].split(',') : [],
+            email: row["Email"] || undefined,
+            password: row["Password"] || undefined,
+          };
+          // Validation for required fields
+          const required = ["memberCode", "fullNames", "firstName", "lastName", "idNumber", "branchId", "districtId", "joinedAt"];
+          const missing = required.filter(f => !memberData[f]);
+          if (missing.length) {
+            errors.push({ line: i + 2, error: `Missing required fields: ${missing.join(', ')}` });
+            continue;
+          }
+          try {
+            const member = this.repository.create(memberData);
+            await this.repository.save(member);
+            inserted.push(member);
+          } catch (err) {
+            errors.push({ line: i + 2, error: err.message });
+          }
+        }
+
+        if (!finished) {
+          finished = true;
+          clearTimeout(timeout);
+          res.status(200).json({
+            status: "success",
+            count: inserted.length,
+            data: inserted,
+            errorLog: errors,
+          });
+        }
+      } catch (err) {
+        if (!finished) {
+          finished = true;
+          clearTimeout(timeout);
+          next(err);
+        }
+      }
+    }
   );
 }

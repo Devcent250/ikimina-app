@@ -19,6 +19,9 @@ import { Branch } from "./Branch";
 
 @Entity("loans")
 export class Loan extends BaseEntity {
+  // Maximum allowed loan amount for the member (total contribution * 3)
+  @Column({ type: "int", nullable: true })
+  allowedLoanAmount: number;
   @PrimaryGeneratedColumn()
   id: number;
 
