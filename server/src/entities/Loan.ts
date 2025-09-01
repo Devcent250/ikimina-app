@@ -33,8 +33,8 @@ export class Loan extends BaseEntity {
   @JoinColumn()
   member: Member;
 
-  @Column({ type: "varchar", length: 100, default: "Other" })
-  loanType: string;
+  @Column({ type: "varchar", length: 100, nullable: true, default: null })
+  loanType?: string;
 
   // status
   // pending, approved, rejected, completed

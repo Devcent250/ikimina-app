@@ -63,7 +63,7 @@ const formSchema = z.object({
   amount: z.number().min(0, "Amount must be a positive number"),
   groupMemberId: z.number().min(1, "Member is required"),
   groupId: z.number().min(1, "Group is required"),
-  loanType: z.number().min(1, "Loan type is required"),
+  // loanType removed
   paymentFrequency: z.enum(["Monthly", "Weekly", "Daily"]),
   interestRate: z.number().min(0, "Interest rate must be a positive number"),
   loanTerms: z.string().min(1, "Loan terms are required"),
@@ -81,18 +81,35 @@ const loanCategorySchema = z.object({
 });
 
 function LoanForm({ isOpen, setIsOpen, refetch, record }) {
-  // Auto-fill and show allowed amount for 'Contribution x3' loan type
+  // State for total contribution and allowed loan amount
+  const [totalContribution, setTotalContribution] = useState<number | null>(null);
   const [allowedAmount, setAllowedAmount] = useState<number | null>(null);
 
-  async function handleLoanTypeChange(loanTypeId: number) {
-    const selected = loanCategories?.find(cat => Number(cat.id) === Number(loanTypeId));
-    field.onChange(loanTypeId);
-    if (selected && selected.name === "Contribution x3" && form.watch("groupMemberId")) {
-      const allowed = await fetchAllowedLoanAmount(form.watch("groupMemberId"));
+  // Fetch total contribution and set allowed loan when member is selected
+  async function handleMemberChange(memberId: number) {
+    field.onChange(memberId);
+    if (memberId) {
+      const { fetchMemberContribution } = await import("@/lib/fetchMemberContribution");
+      const contribution = await fetchMemberContribution(memberId);
+      setTotalContribution(contribution);
+      const allowed = contribution * 3;
       setAllowedAmount(allowed);
       form.setValue("amount", allowed);
     } else {
+      setTotalContribution(null);
       setAllowedAmount(null);
+      form.setValue("amount", 0);
+    }
+  }
+
+  // Loan type change only resets amount if not 'Contribution x3'
+  async function handleLoanTypeChange(loanTypeId: number) {
+    const selected = loanCategories?.find(cat => Number(cat.id) === Number(loanTypeId));
+    field.onChange(loanTypeId);
+    if (!(selected && selected.name === "Contribution x3")) {
+      setAllowedAmount(null);
+      setTotalContribution(null);
+      form.setValue("amount", 0);
     }
   }
   // Auto-fill amount when member is selected
@@ -138,13 +155,11 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     // Find the selected category by ID
-    const selectedCategory = loanCategories?.find(cat => String(cat.id) === String(values.loanType));
     const payload = {
       ...values,
       groupMemberId: Number(values.groupMemberId),
       groupId: Number(values.groupId),
       branchId: Number(values.branchId),
-      loanType: selectedCategory ? selectedCategory.name : "", // Send enum name
       amount: Number(values.amount),
       interestRate: Number(values.interestRate),
     };
@@ -171,23 +186,33 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
       });
   }
 
-  const { data: groupMembers = [] } = useQuery(
-    [
-      "group-members",
-      {
-        groupId: form.watch("groupId"),
-      },
-    ],
-    async () => {
-      const { data } = await api.get(
-        `/groups/${form.watch("groupId")}/members`
-      );
-      return data.results;
-    },
-    {
-      enabled: Boolean(form.watch("groupId")),
+  // Fetch all saving groups
+  const { data: allGroups = [], isLoading: loadingGroups } = useQuery([
+    "all-groups"
+  ], async () => {
+    const { data } = await api.get("/groups");
+    return data.results || [];
+  });
+
+  // Fetch all members from all groups
+  const { data: groupMembers = [], isLoading: loadingMembers } = useQuery([
+    "all-group-members", allGroups.map(g => g.id)
+  ], async () => {
+    const allMembers = [];
+    for (const group of allGroups) {
+      try {
+        const { data } = await api.get(`/groups/${group.id}/members`);
+        if (data?.results?.length) {
+          allMembers.push(...data.results);
+        }
+      } catch (e) {
+        // ignore errors for individual groups
+      }
     }
-  );
+    return allMembers;
+  }, {
+    enabled: allGroups.length > 0
+  });
 
   const { data: groups } = useQuery(
     [
@@ -236,76 +261,93 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
             >
               <div className="space-y-1" >
                 <div className="grid grid-cols-2 gap-3" >
-                  <div className="col-span-2" >
-                    <FormField
-                      control={form.control}
-                      name="loanType"
-                      render={({ field, fieldState }) => (
-                        <FormItem>
-                          <FormLabel>Loan Type </FormLabel>
-                          < FormControl >
-                            <Select
-                              onValueChange={val => handleLoanTypeChange(Number(val))}
-                              value={field.value !== undefined ? String(field.value) : undefined}
-                              disabled={loadingCategories}
-                            >
-                              <FormControl>
-                                <SelectTrigger error={fieldState?.error?.message}>
-                                  <SelectValue placeholder={loadingCategories ? "Loading..." : "Select type"} />
-                                </SelectTrigger>
-                              </FormControl>
-                              < SelectContent >
-                                {loanCategories && loanCategories.length > 0 ? (
-                                  loanCategories.map((cat) => (
-                                    <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
-                                  ))
-                                ) : (
-                                  <SelectItem value="placeholder" disabled>
-                                    {loadingCategories ? "Loading..." : "No categories found"}
-                                  </SelectItem>
-                                )}
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
-                          < FormMessage />
-                        </FormItem>
-                      )
-                      }
-                    />
-                  </div>
-
-                  < FormField
+                  {/* Member selection at the top and always enabled */}
+                  <FormField
                     control={form.control}
-                    name="amount"
+                    name="groupMemberId"
                     render={({ field, fieldState }) => (
                       <FormItem>
-                        <FormLabel>Amount</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="Enter Loan Amount"
-                            error={fieldState?.error?.message}
-                            disabled={Boolean(form.watch("loanType")) && form.watch("amount") > 0}
-                            {...field}
-                            onChange={e => field.onChange(Number(e.target.value))}
+                        <FormLabel>Member</FormLabel>
+                        <div className="mb-2">
+                          <label className="block text-xs font-medium text-gray-600">Total Contribution</label>
+                          <input
+                            type="text"
+                            className="w-full border rounded px-2 py-1 text-sm bg-gray-100"
+                            value={
+                              field.value
+                                ? (totalContribution === null
+                                  ? "Fetching..."
+                                  : `${totalContribution.toLocaleString()} FRW`)
+                                : "-"
+                            }
+                            readOnly
                           />
-                        </FormControl>
-                        {allowedAmount !== null && (
-                          <div className="text-xs text-blue-600 mt-1">
-                            Allowed amount for this member: {allowedAmount.toLocaleString()} FRW
+                        </div>
+                        <SearchSelect
+                          error={fieldState?.error?.message}
+                          options={
+                            groupMembers.map((e) => ({
+                              label: e.member?.fullNames || "Unknown Member",
+                              value: Number(e.id),
+                            }))
+                          }
+                          value={field.value}
+                          setValue={async val => {
+                            field.onChange(Number(val));
+                            setTotalContribution(null); // Always show 'Fetching...' until loaded
+                            setAllowedAmount(null);
+                            if (val) {
+                              const { fetchMemberContribution } = await import("@/lib/fetchMemberContribution");
+                              const contribution = await fetchMemberContribution(Number(val));
+                              setTotalContribution(contribution);
+                              const allowed = contribution * 3;
+                              setAllowedAmount(allowed);
+                              form.setValue("amount", allowed);
+                            } else {
+                              form.setValue("amount", 0);
+                            }
+                          }}
+                          placeholder={"Select member"}
+                        />
+                        {totalContribution !== null && totalContribution !== undefined && (
+                          <div className="text-xs text-green-600 mt-1">
+                            Total Contribution: {totalContribution.toLocaleString()} FRW
                           </div>
                         )}
+                        {/* Only show allowed loan once */}
+                        {allowedAmount !== null && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            Allowed loan for this member: {allowedAmount.toLocaleString()} FRW
+                          </div>
+                        )}
+
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  < FormField
+                  {/* Other fields */}
+                  <div className="col-span-2" >
+                    {/* Loan Type field removed as requested */}
+                  </div>
+
+                  {/* Show calculated amount only, not editable */}
+                  {allowedAmount !== null && (
+                    <div className="col-span-2">
+                      <FormLabel>Amount</FormLabel>
+                      <div className="text-base font-semibold text-blue-700 mb-2">
+                        {allowedAmount.toLocaleString()} FRW
+                      </div>
+                    </div>
+                  )}
+
+                  <FormField
                     control={form.control}
                     name="interestRate"
                     render={({ field, fieldState }) => (
                       <FormItem>
                         <FormLabel>Interest Rate</FormLabel>
-                        < FormControl >
+                        <FormControl>
                           <Input
                             type="number"
                             placeholder="Enter Interest Rate"
@@ -319,13 +361,13 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                     )}
                   />
 
-                  < FormField
+                  <FormField
                     control={form.control}
                     name="paymentFrequency"
                     render={({ field, fieldState }) => (
                       <FormItem>
                         <FormLabel>Payment Frequency </FormLabel>
-                        < FormControl >
+                        <FormControl>
                           <Select
                             onValueChange={field.onChange}
                             defaultValue={field.value}
@@ -335,25 +377,25 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                                 <SelectValue placeholder="Select frequency" />
                               </SelectTrigger>
                             </FormControl>
-                            < SelectContent >
+                            <SelectContent>
                               <SelectItem value="Monthly" > Monthly </SelectItem>
-                              < SelectItem value="Weekly" > Weekly </SelectItem>
-                              < SelectItem value="Daily" > Daily </SelectItem>
+                              <SelectItem value="Weekly" > Weekly </SelectItem>
+                              <SelectItem value="Daily" > Daily </SelectItem>
                             </SelectContent>
                           </Select>
                         </FormControl>
-                        < FormMessage />
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  < FormField
+                  <FormField
                     control={form.control}
                     name="branchId"
                     render={({ field, fieldState }) => (
                       <FormItem>
                         <FormLabel>Branch </FormLabel>
-                        < FormControl >
+                        <FormControl>
                           <Select
                             onValueChange={value => field.onChange(Number(value))}
                             value={field.value !== undefined ? String(field.value) : undefined}
@@ -372,20 +414,19 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                             </SelectContent>
                           </Select>
                         </FormControl>
-                        < FormMessage />
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  < FormField
+                  <FormField
                     control={form.control}
                     name="groupId"
                     render={({ field, fieldState }) => (
                       <FormItem>
                         <FormLabel>Group </FormLabel>
-                        < FormControl >
+                        <FormControl>
                           <Select
-                            disabled={!form.getValues("branchId")}
                             onValueChange={value => field.onChange(Number(value))}
                             value={field.value !== undefined ? String(field.value) : undefined}
                           >
@@ -403,31 +444,6 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                             </SelectContent>
                           </Select>
                         </FormControl>
-                        < FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  < FormField
-                    control={form.control}
-                    name="groupMemberId"
-                    render={({ field, fieldState }) => (
-                      <FormItem>
-                        <FormLabel>Member </FormLabel>
-                        <SearchSelect
-                          disabled={!form.getValues("groupId")}
-                          error={fieldState?.error?.message}
-                          options={
-                            groupMembers.map((e) => {
-                              return {
-                                label: e.member?.fullNames || "Unknown Member",
-                                value: e.id, // Use group member ID (number)
-                              };
-                            })
-                          }
-                          value={field.value}
-                          setValue={field.onChange}
-                          placeholder={"Select member"}
-                        />
                         <FormMessage />
                       </FormItem>
                     )}
