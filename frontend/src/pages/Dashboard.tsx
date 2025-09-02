@@ -345,9 +345,9 @@ export default function DashboardOverview() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentContributions?.map((contribution) => {
+                  {recentContributions?.map((contribution, idx) => {
                     return (
-                      <TableRow>
+                      <TableRow key={contribution?.id ?? idx}>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-8 w-8">
@@ -368,7 +368,7 @@ export default function DashboardOverview() {
                           {contribution?.depositAmount?.toLocaleString()} FRW
                         </TableCell>
                         <TableCell className="truncate">
-                          {format(contribution.createdAt, "MMM dd, yyyy")}
+                          {contribution?.createdAt ? format(new Date(contribution.createdAt), "MMM dd, yyyy") : "-"}
                         </TableCell>
                         <TableCell className="truncate">
                           {contribution.paymentMethod?.name}

@@ -59,7 +59,6 @@ import {
 import { cn, canPerformAdminActions } from "@/lib/utils";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as z from "zod";
 import useConfirmModal from "@/hooks/useConfirmModal";
@@ -106,9 +105,8 @@ const formSchema = z.object({
 
 function MemberForm({ isOpen, setIsOpen, refetch, record }) {
   // Track if leader role is already taken in selected group(s)
-  const [roleConflict, setRoleConflict] = useState<string | null>(null);
+  const [roleConflict] = useState<string | null>(null);
   const { user } = useAuth();
-  const canPerformActions = canPerformAdminActions(user);
 
   // Extract group IDs helper function
   const extractGroupIds = (record) => {
@@ -135,7 +133,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
       return response.data;
     },
     {
-      enabled: !canPerformActions,
+      enabled: !canPerformAdminActions(user),
       staleTime: 0,
     }
   );
@@ -227,32 +225,41 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
   useEffect(() => {
     if (isOpen) {
       // Refetch user group data when form opens
-      if (!canPerformActions) {
+      if (!canPerformAdminActions(user)) {
         refetchUserGroup();
       }
     }
-  }, [isOpen, canPerformActions, refetchUserGroup]);
+  }, [isOpen, user, refetchUserGroup]);
 
-  // Effect to update form values when user group data is available
+  // Effect to update form values when user group data is available or when editing a member
   useEffect(() => {
-    if (isOpen && !canPerformActions) {
-      // Set district and branch IDs from user data for non-admins
-      if (user?.branch?.district?.id) {
-        form.setValue("districtId", user.branch.district.id.toString());
+    if (isOpen) {
+      if (!canPerformAdminActions(user)) {
+        // Set district and branch IDs from user data for non-admins
+        if (user?.branch?.district?.id) {
+          form.setValue("districtId", user.branch.district.id.toString());
+        }
+        if (user?.branch?.id) {
+          form.setValue("branchId", user.branch.id.toString());
+        }
+        // Set group ID when user group data is available
+        if (userGroup?.data?.id) {
+          form.setValue("groupIds", [userGroup.data.id.toString()]);
+        } else if (user?.group?.id) {
+          form.setValue("groupIds", [user.group.id.toString()]);
+        }
       }
-
-      if (user?.branch?.id) {
-        form.setValue("branchId", user.branch.id.toString());
-      }
-
-      // Set group ID when user group data is available
-      if (userGroup?.data?.id) {
-        form.setValue("groupIds", [userGroup.data.id.toString()]);
-      } else if (user?.group?.id) {
-        form.setValue("groupIds", [user.group.id.toString()]);
+      // If editing a member, set values from record and refetch branches/groups
+      if (record) {
+        // Set district and branch first, then refetch branches
+        form.setValue("districtId", record?.branch?.district?.id?.toString() || "");
+        form.setValue("branchId", record?.branch?.id?.toString() || "");
+        refetchBranches();
+        form.setValue("groupIds", extractGroupIds(record));
+        refetchGroups();
       }
     }
-  }, [isOpen, canPerformActions, user, userGroup, form]);
+  }, [isOpen, user, userGroup, form, record, refetchBranches, refetchGroups]);
 
   // Clear branch and group selections when district changes
   useEffect(() => {
@@ -386,7 +393,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                             <Select
                               onValueChange={field.onChange}
                               value={field.value}
-                              disabled={!canPerformActions} // Disable district selection for non-admin users
+                              disabled={!canPerformAdminActions(user)} // Disable district selection for non-admin users
                             >
                               <FormControl>
                                 <SelectTrigger error={fieldState?.error?.message}>
@@ -419,7 +426,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                             <Select
                               onValueChange={field.onChange}
                               value={field.value}
-                              disabled={!form.watch("districtId") || !canPerformActions} // Disable branch selection if no district or non-admin
+                              disabled={!form.watch("districtId") || !canPerformAdminActions(user)} // Disable branch selection if no district or non-admin
                             >
                               <FormControl>
                                 <SelectTrigger error={fieldState?.error?.message}>
@@ -450,7 +457,7 @@ function MemberForm({ isOpen, setIsOpen, refetch, record }) {
                           <FormLabel>Groups</FormLabel>
                           <FormControl>
                             <MultiSelect
-                              disabled={!form.watch("branchId") || !canPerformActions} // Disable group selection if no branch or non-admin
+                              disabled={!form.watch("branchId") || !canPerformAdminActions(user)} // Disable group selection if no branch or non-admin
                               options={
                                 groups?.map((g) => ({
                                   value: g.id.toString(),
@@ -841,7 +848,6 @@ export default function Members() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const { user } = useAuth();
-  const canPerformActions = canPerformAdminActions(user);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   // Sample row for template download
   const sampleMember = [{

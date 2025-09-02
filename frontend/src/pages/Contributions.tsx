@@ -9,6 +9,9 @@ import {
   Download,
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
+import { useAuth } from "@/context/auth.context";
+import useModalState from "@/hooks/useModalState";
+import useConfirmModal from "@/hooks/useConfirmModal";
 import { useQuery } from "react-query";
 import { usePDF } from "react-to-pdf";
 import { Button } from "@/components/ui/button";
@@ -21,8 +24,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import useModalState from "@/hooks/useModalState";
-import useConfirmModal from "@/hooks/useConfirmModal";
 import ConfirmModal from "@/components/modal/ConfirmModal";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -39,7 +40,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import SearchSelect from "@/components/ui/search-select";
-import { useAuth } from "@/context/auth.context";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -50,7 +50,6 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
-import React from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableRow, TableHeader, TableHead } from "@/components/ui/table";
@@ -126,14 +125,6 @@ const formSchema = z.object({
   transactionId: z.string().optional(),
 });
 
-// Mock modal hooks (replace with actual implementations)
-const confirmModal = {
-  isOpen: false,
-  isLoading: false,
-  meta: {},
-  setIsLoading: () => { },
-  close: () => { },
-};
 
 // MemberContributionsTable component
 function MemberContributionsTable({
@@ -232,6 +223,25 @@ function MemberContributionsTable({
           </div>
           <div className="border-b" />
         </div>
+        {/* Add total amount and total solidarity above the table */}
+        <div className="mb-2 flex justify-end gap-8">
+          <div className="text-right">
+            <span className="font-semibold">Total Amount: </span>
+            <span>
+              {memberContributions.reduce((total, c) =>
+                total + Number(c.depositAmount || 0) + Number(c.solidarityAmount || 0), 0
+              ).toLocaleString()} FRW
+            </span>
+          </div>
+          <div className="text-right">
+            <span className="font-semibold">Total Solidarity: </span>
+            <span>
+              {memberContributions.reduce((total, c) =>
+                total + Number(c.solidarityAmount || 0), 0
+              ).toLocaleString()} FRW
+            </span>
+          </div>
+        </div>
         <div className="border rounded-md">
           <Table className="w-full">
             <TableHeader>
@@ -317,7 +327,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
   const { user } = useAuth();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    values: record
+    defaultValues: record
       ? {
         ...record,
         totalAmount: (
@@ -343,15 +353,14 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
         branchId: "",
         contributionType: undefined,
         documentReceipt: null,
-        transactionId: "",
-      },
-  });
+        transactionId: ""
+      }
+    });
 
   const [selectedMember, setSelectedMember] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [numberOfShares, setNumberOfShares] = useState(0);
   const [availableGroupMembers, setAvailableGroupMembers] = useState([]);
-  const [allGroupMemberships, setAllGroupMemberships] = useState([]);
 
   useEffect(() => {
     if (selectedGroup && form.watch("totalAmount")) {
@@ -909,7 +918,7 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
                               <div className="space-y-2">
                                 <Input
                                   type="file"
-                                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                  accept=".pdf,.jpg,.jpeg,.png"
                                   onChange={(e) => {
                                     const file = e.target.files?.[0];
                                     field.onChange(file);
@@ -995,6 +1004,11 @@ function ContributionForm({ isOpen, setIsOpen, refetch, record }) {
 
 // Main Contributions component
 export default function Contributions() {
+  const { user } = useAuth();
+  const newRecordModal = useModalState();
+  const confirmModal = useConfirmModal();
+  const [excelRows, setExcelRows] = useState<any[]>([]);
+  const [allGroupMemberships, setAllGroupMemberships] = useState<any[]>([]);
   // Fetch all members for mapping Excel rows
   const { data: allMembers = [] } = useQuery(["all-members"], async () => {
     const { data } = await api.get(`/members`);
@@ -1069,12 +1083,7 @@ export default function Contributions() {
       documentReceipt: row.DocumentReceipt || '',
     };
   }
-  const [addedExcelRows, setAddedExcelRows] = useState([]);
-  const [excelRows, setExcelRows] = useState([]);
-  const newRecordModal = useModalState();
-  const { user } = useAuth();
   const [recordToEdit, setRecordToEdit] = useState(undefined);
-  const [allGroupMemberships, setAllGroupMemberships] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [debouncedSearchText, setDebouncedSearchText] = useState("");
   const debounceTimeout = useRef(null);
@@ -1085,13 +1094,6 @@ export default function Contributions() {
     pageIndex: 0,
     pageSize: 10,
   });
-  const [isBulkModalOpen, setBulkModalOpen] = useState(false);
-  const [bulkRows, setBulkRows] = useState([
-    { memberId: '', amount: '', group: '', zone: '', paymentMethod: '' },
-  ]);
-  const [lastGroup, setLastGroup] = useState('');
-  const [lastZone, setLastZone] = useState('');
-  const [lastPaymentMethod, setLastPaymentMethod] = useState('');
   const [selectedContribution, setSelectedContribution] = useState(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedMemberForDetails, setSelectedMemberForDetails] = useState<Member | null>(null);
@@ -1122,19 +1124,13 @@ export default function Contributions() {
     keepPreviousData: true,
     queryFn: async () => {
       // Build params for API
-      const params = {
+      const params: any = {
         page_size: pageSize,
         page: pageIndex + 1,
         sortBy: sorting[0]?.id || "createdAt",
         order: sorting[0]?.desc ? "DESC" : "ASC",
       };
-
-      // If searchText is present, send as search param (for member name)
-      if (searchText) {
-        params.search = searchText;
-      }
-
-      // Build filters array
+      if (searchText) params.search = searchText;
       if (columnFilters.length > 0) {
         params.filters = columnFilters.map((filter) => {
           const fieldMap = {
@@ -1203,7 +1199,7 @@ export default function Contributions() {
     { enabled: !!selectedContribution?.id }
   );
 
-  const handleDelete = (record) => {
+  const handleDelete = () => {
     confirmModal.setIsLoading(true);
   };
 
@@ -1328,11 +1324,14 @@ export default function Contributions() {
           return null;
         }
         const group = row.getValue("group");
-        // If group is an object, show its name
-        const groupName = typeof group === 'object' && group !== null ? group.name : group;
+        // If group is an object, show its name; coerce to string for ReactNode
+        const groupName: string =
+          typeof group === "object" && group !== null && (group as any).name
+            ? String((group as any).name)
+            : String(group ?? "-");
         return (
           <div className="flex items-center gap-3 truncate">
-            {groupName || "-"}
+            {groupName}
           </div>
         );
       },
@@ -1371,9 +1370,10 @@ export default function Contributions() {
         if (row.original.meta?.isFooter) {
           return null;
         }
+        const value = row.getValue("paymentMethod") as any;
         return (
           <div className="flex items-center gap-3 truncate">
-            {row.getValue("paymentMethod")}
+            {String((value as any)?.name ?? value ?? "-")}
           </div>
         );
       },
@@ -1436,9 +1436,10 @@ export default function Contributions() {
         if (row.original.meta?.isFooter) {
           return null;
         }
+        const value = row.getValue("receivedBy") as any;
         return (
           <div className="flex items-center gap-3 truncate">
-            {row.getValue("receivedBy")}
+            {String((value as any)?.name ?? value ?? "-")}
           </div>
         );
       },
@@ -1662,7 +1663,11 @@ export default function Contributions() {
                     const XLSX = await import('xlsx');
                     const reader = new FileReader();
                     reader.onload = (evt) => {
-                      const data = new Uint8Array(evt.target.result);
+                      const result = evt.target?.result;
+                      let data;
+                      if (result instanceof ArrayBuffer) {
+                        data = new Uint8Array(result);
+                      }
                       const workbook = XLSX.read(data, { type: 'array' });
                       const sheetName = workbook.SheetNames[0];
                       const worksheet = workbook.Sheets[sheetName];
@@ -1738,7 +1743,7 @@ export default function Contributions() {
         title="Are you sure you want to delete?"
         description="This will permanently delete the contribution and cannot be undone."
         meta={confirmModal.meta}
-        onConfirm={(meta) => handleDelete(meta)}
+        onConfirm={() => handleDelete()}
         isLoading={confirmModal.isLoading}
         open={confirmModal.isOpen}
         onClose={() => confirmModal.close()}
@@ -1970,7 +1975,8 @@ export default function Contributions() {
                   {contributionDetailsQuery.data.fines?.length > 0 && (
                     <div className="bg-card rounded-lg border p-4 md:p-6">
                       <h3 className="text-base font-semibold mb-4">Fines</h3>
-                      <div className="space-y-4">
+
+                      <div className="space-y-3">
                         {contributionDetailsQuery.data.fines.map((fine, index) => (
                           <div key={index} className="border rounded-lg p-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1988,16 +1994,16 @@ export default function Contributions() {
                       </div>
                     </div>
                   )}
-                </div>
+              </div>
               </div>
             </ScrollArea>
-          ) : (
-            <div className="p-8 text-center text-muted-foreground">
-              No contribution details available
-            </div>
+        ) : (
+        <div className="p-8 text-center text-muted-foreground">
+          No contribution details available
+        </div>
           )}
-        </DialogContent>
-      </Dialog>
-    </div>
+      </DialogContent>
+    </Dialog>
+    </div >
   );
 }

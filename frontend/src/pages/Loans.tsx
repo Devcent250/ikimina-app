@@ -1,4 +1,3 @@
-
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import DataTableColumnHeader from "@/components/datatable/DataTableColumnHeader";
 import { Loader, MoreVertical, PlusCircle, CheckCircle, XCircle } from "lucide-react";
@@ -85,46 +84,17 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
   const [totalContribution, setTotalContribution] = useState<number | null>(null);
   const [allowedAmount, setAllowedAmount] = useState<number | null>(null);
 
-  // Fetch total contribution and set allowed loan when member is selected
-  async function handleMemberChange(memberId: number) {
-    field.onChange(memberId);
-    if (memberId) {
-      const { fetchMemberContribution } = await import("@/lib/fetchMemberContribution");
-      const contribution = await fetchMemberContribution(memberId);
-      setTotalContribution(contribution);
-      const allowed = contribution * 3;
-      setAllowedAmount(allowed);
-      form.setValue("amount", allowed);
-    } else {
-      setTotalContribution(null);
-      setAllowedAmount(null);
-      form.setValue("amount", 0);
-    }
-  }
-
-  // Loan type change only resets amount if not 'Contribution x3'
-  async function handleLoanTypeChange(loanTypeId: number) {
-    const selected = loanCategories?.find(cat => Number(cat.id) === Number(loanTypeId));
-    field.onChange(loanTypeId);
-    if (!(selected && selected.name === "Contribution x3")) {
-      setAllowedAmount(null);
-      setTotalContribution(null);
-      form.setValue("amount", 0);
-    }
-  }
-  // Auto-fill amount when member is selected
-
+  // Removed unused handlers relying on field context
 
   // Removed loan eligibility logic
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    values: record
+    defaultValues: record
       ? {
         ...record,
         branchId: record.branchId ? Number(record.branchId) : undefined,
         groupId: record.groupId ? Number(record.groupId) : undefined,
         groupMemberId: record.groupMemberId ? Number(record.groupMemberId) : undefined,
-        loanType: record.loanType ? Number(record.loanType) : undefined,
         amount: record.amount ? Number(record.amount) : 0,
         interestRate: record.interestRate ? Number(record.interestRate) : 0,
       }
@@ -132,7 +102,6 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
         amount: 0,
         groupMemberId: undefined,
         groupId: undefined,
-        loanType: undefined,
         paymentFrequency: "",
         interestRate: 0,
         loanTerms: "",
@@ -143,15 +112,7 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
 
   const { user } = useAuth();
 
-  // Fetch loan categories from backend
-  const { data: loanCategories, isLoading: loadingCategories } = useQuery([
-    "loan-categories"
-  ], async () => {
-    const { data } = await api.get("/loan-categories");
-    return data?.data?.results || data?.data || [];
-  });
-
-  // Removed auto-fill for amount and interest rate. User must enter manually.
+  // Removed unused loan categories query
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     // Find the selected category by ID
@@ -187,7 +148,7 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
   }
 
   // Fetch all saving groups
-  const { data: allGroups = [], isLoading: loadingGroups } = useQuery([
+  const { data: allGroups = [] } = useQuery([
     "all-groups"
   ], async () => {
     const { data } = await api.get("/groups");
@@ -195,7 +156,7 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
   });
 
   // Fetch all members from all groups
-  const { data: groupMembers = [], isLoading: loadingMembers } = useQuery([
+  const { data: groupMembers = [] } = useQuery([
     "all-group-members", allGroups.map(g => g.id)
   ], async () => {
     const allMembers = [];
@@ -352,7 +313,6 @@ function LoanForm({ isOpen, setIsOpen, refetch, record }) {
                             type="number"
                             placeholder="Enter Interest Rate"
                             error={fieldState?.error?.message}
-                            disabled={Boolean(form.watch("loanType"))}
                             {...field}
                             onChange={e => field.onChange(Number(e.target.value))}
                           />
@@ -946,7 +906,7 @@ function LoanRequestTab({
       item.group,
       item.createdBy
     ]);
-    const tableResult = autoTable(doc, {
+    autoTable(doc as any, {
       head: headers,
       body: rows,
       startY: 50,
@@ -957,7 +917,7 @@ function LoanRequestTab({
       tableLineColor: 200,
       tableLineWidth: 0.5,
       alternateRowStyles: { fillColor: [255, 255, 255] },
-      didDrawPage: (data) => {
+      didDrawPage: () => {
         // Custom header/footer if needed
       }
     });
@@ -1536,7 +1496,7 @@ function MemberLoanHistory({ memberId }: { memberId: number | null }) {
                 <tr key={loan.id} className="border-b">
                   <td className="p-3 text-sm">
                     {new Date(loan.createdAt).toLocaleDateString()}
-                  </td>image.png
+                  </td>
                   <td className="p-3 text-sm capitalize">{loan.loanType}</td>
                   <td className="p-3 text-sm font-medium">
                     {loan.amount?.toLocaleString()} FRW
