@@ -415,7 +415,7 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
                     name="branchId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Zone </FormLabel>
+                        <FormLabel>Sector </FormLabel>
                         < Select
                           onValueChange={(value) =>
                             field.onChange(Number(value))
@@ -428,8 +428,8 @@ function GroupForm({ isOpen, setIsOpen, refetch, record }) {
                               <SelectValue
                                 placeholder={
                                   districtBranchesQuery.isLoading
-                                    ? "Loading zones..."
-                                    : "Select zone"
+                                    ? "Loading sectors..."
+                                    : "Select sector"
                                 }
                               />
                             </SelectTrigger>

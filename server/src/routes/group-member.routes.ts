@@ -14,6 +14,10 @@ router.post("/", validateSchema(createGroupMemberSchema), controller.create);
 router.delete("/:recordId", controller.delete);
 router.get("/", controller.getAll);
 router.get("/:recordId", controller.getOne);
+// Endpoint for allowed loan amount for autofill
+import { LoanController } from "../controllers/loan-controller";
+const loanController = new LoanController();
+router.get("/:groupMemberId/allowed-loan-amount", loanController.getAllowedLoanAmount);
 router.patch(
   "/:recordId",
   validateSchema(updateGroupMemberSchema),

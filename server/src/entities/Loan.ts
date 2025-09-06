@@ -19,6 +19,9 @@ import { Branch } from "./Branch";
 
 @Entity("loans")
 export class Loan extends BaseEntity {
+  // Maximum allowed loan amount for the member (total contribution * 3)
+  @Column({ type: "int", nullable: true })
+  allowedLoanAmount: number;
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -30,8 +33,8 @@ export class Loan extends BaseEntity {
   @JoinColumn()
   member: Member;
 
-  @Column({ type: "varchar", length: 100, default: "Other" })
-  loanType: string;
+  @Column({ type: "varchar", length: 100, nullable: true, default: null })
+  loanType?: string;
 
   // status
   // pending, approved, rejected, completed

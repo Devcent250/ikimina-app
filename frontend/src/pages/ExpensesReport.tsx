@@ -1,4 +1,6 @@
-import { endOfMonth, format, startOfMonth } from "date-fns";
+import endOfMonth from "date-fns/endOfMonth";
+import format from "date-fns/format";
+import startOfMonth from "date-fns/startOfMonth";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,

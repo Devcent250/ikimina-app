@@ -2,7 +2,7 @@ import Joi from "joi";
 
 export const createLoanSchema = Joi.object({
   groupMemberId: Joi.number().required(),
-  loanType: Joi.string().required(), // Accept any string (loan category ID)
+  loanType: Joi.string().optional().allow(""), // Now optional
   amount: Joi.number().precision(2).positive().required(),
   loanTerms: Joi.string().required(),
   interestRate: Joi.number().precision(2).min(0).max(100).required(),

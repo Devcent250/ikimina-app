@@ -9,7 +9,7 @@ import { Member } from "../entities/Member";
 import { Branch } from "../entities/Branch";
 import { QueryParams } from "../types/QueryParams";
 import { User } from "../entities/User";
-import bcrypt from "bcrypt";
+import * as bcrypt from "bcryptjs";
 
 export class GroupController {
   private repository: Repository<Group> = AppDataSource.getRepository(Group);

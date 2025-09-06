@@ -15,6 +15,26 @@ import { Branch } from "../entities/Branch";
 import { LoanVerification } from "../entities/LoanVerification";
 
 export class LoanController {
+  // Endpoint: GET /group-members/:groupMemberId/allowed-loan-amount
+  getAllowedLoanAmount = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      const { groupMemberId } = req.params;
+      const groupMember = await AppDataSource.getRepository("GroupMember").findOne({
+        where: { id: Number(groupMemberId) },
+        relations: ["member"]
+      });
+      if (!groupMember) {
+        return next(new NotFoundError("Group member not found"));
+      }
+      const totalContribution = await AppDataSource.getRepository("Contribution")
+        .createQueryBuilder("contribution")
+        .where("contribution.member.id = :memberId", { memberId: groupMember.member.id })
+        .select("SUM(contribution.depositAmount + contribution.solidarityAmount)", "total")
+        .getRawOne();
+      const allowedLoanAmount = (Number(totalContribution?.total) || 0) * 3;
+      res.json({ allowedLoanAmount });
+    }
+  );
   private repository: Repository<Loan> = AppDataSource.getRepository(Loan);
   private queryBuilder: QueryBuilder<Loan>;
 
@@ -98,10 +118,6 @@ export class LoanController {
         return next(new NotFoundError("Group member not found"));
       }
 
-      // Check loan eligibility
-      if (!groupMember.loanEligibility) {
-        return next(new BadRequestError("Member is not eligible for loans"));
-      }
 
       const season = await AppDataSource.getRepository(Season).findOne({
         where: { id: seasonId },
@@ -136,6 +152,20 @@ export class LoanController {
       // For regular members, createdBy can be null (no user account needed)
 
       // Create new loan
+      // Calculate total contribution for the member
+      const totalContribution = await AppDataSource.getRepository("Contribution")
+        .createQueryBuilder("contribution")
+        .where("contribution.member.id = :memberId", { memberId: groupMember.member.id })
+        .select("SUM(contribution.depositAmount + contribution.solidarityAmount)", "total")
+        .getRawOne();
+
+      const allowedLoanAmount = (Number(totalContribution?.total) || 0) * 3;
+
+      // If requested amount exceeds allowed, reject
+      if (amount > allowedLoanAmount) {
+        return next(new BadRequestError(`Requested loan amount exceeds allowed limit. Max allowed: ${allowedLoanAmount}`));
+      }
+
       const newLoan = this.repository.create({
         groupMember,
         member: groupMember.member,
@@ -149,6 +179,7 @@ export class LoanController {
         paymentFrequency,
         attachments,
         branch: branch,
+        allowedLoanAmount,
       });
 
       const savedLoan = await this.repository.save(newLoan);
@@ -156,6 +187,7 @@ export class LoanController {
       res.status(201).json({
         status: "success",
         data: this.format(savedLoan),
+        allowedLoanAmount,
       });
     }
   );
@@ -235,9 +267,6 @@ export class LoanController {
         if (!groupMember) {
           return next(new NotFoundError("Group member not found"));
         }
-        if (!groupMember.loanEligibility) {
-          return next(new BadRequestError("Member is not eligible for loans"));
-        }
         loan.groupMember = groupMember;
       }
 
@@ -304,7 +333,7 @@ export class LoanController {
   getAll = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       const user = req.user;
-      
+
       // Check user permissions and filter data accordingly
       if (user.isAdmin) {
         // Admin can see all loans - proceed with normal query
@@ -339,10 +368,10 @@ export class LoanController {
         // Group leaders can only see loans from their groups
         const { Group } = await import("../entities/Group");
         const groupRepository = AppDataSource.getRepository(Group);
-        
+
         // Find groups where the user is a leader
         let userGroups = [];
-        
+
         if (user.role?.name === "President") {
           const presidentGroups = await groupRepository.find({
             where: { president: { id: user.id } },
@@ -362,7 +391,7 @@ export class LoanController {
           });
           userGroups = secretaryGroups;
         }
-        
+
         if (userGroups.length === 0) {
           // User is a leader but has no groups, return empty result
           res.json({
@@ -376,9 +405,9 @@ export class LoanController {
           });
           return;
         }
-        
+
         const groupIds = userGroups.map(g => g.id);
-        
+
         // Get loans from user's groups
         const loans = await this.repository
           .createQueryBuilder("loan")
@@ -392,9 +421,9 @@ export class LoanController {
           .where("loan.group.id IN (:...groupIds)", { groupIds })
           .orderBy("loan.createdAt", "DESC")
           .getMany();
-        
+
         const formattedResults = loans.map(this.format);
-        
+
         res.json({
           results: formattedResults,
           pagination: {
@@ -418,9 +447,9 @@ export class LoanController {
           .where("loan.member.id = :memberId", { memberId: user.id })
           .orderBy("loan.createdAt", "DESC")
           .getMany();
-        
+
         const formattedResults = loans.map(this.format);
-        
+
         res.json({
           results: formattedResults,
           pagination: {
@@ -580,27 +609,10 @@ export class LoanController {
         return next(new NotFoundError("Loan not found"));
       }
 
-      // Get approval counts
-      const approvals = loan.verifications?.filter(v => v.status === "Approved") || [];
-      const rejections = loan.verifications?.filter(v => v.status === "Rejected") || [];
-
-      const approvalStatus = {
-        loan: this.format(loan),
-        approvals: approvals.length,
-        rejections: rejections.length,
-        totalLeaders: 3,
-        neededApprovals: 3,
-        canApprove: loan.status === "pending",
-        currentUserApproved: approvals.some(v => v.member?.id === req.user?.id),
-        currentUserRejected: rejections.some(v => v.member?.id === req.user?.id),
-        currentUserCanApprove: loan.status === "pending" &&
-          !approvals.some(v => v.member?.id === req.user?.id) &&
-          !rejections.some(v => v.member?.id === req.user?.id)
-      };
-
+      // Removed loan eligibility logic
       res.status(200).json({
         status: "success",
-        data: approvalStatus
+        data: this.format(loan)
       });
     }
   );
