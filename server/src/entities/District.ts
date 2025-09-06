@@ -33,4 +33,4 @@ import {
       onUpdate: "CURRENT_TIMESTAMP",
     })
     updatedAt: Date;
-  } 
+  }   
