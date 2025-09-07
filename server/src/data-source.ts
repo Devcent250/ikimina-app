@@ -63,15 +63,12 @@ export const AppDataSource = new DataSource({
     LoanPayment,
     LoanVerification,
     Member,
-    PasswordReset,
     PaymentMethod,
-    RefreshToken,
     Role,
     Season,
-    User,
   ],
   migrations: MIGRATION_FILES,
-  migrationsRun: true, // Enable migrations to run automatically
-  logging: false,
-  synchronize: process.env.NODE_ENV === "development", // Re-enabled after fixing memberCode issue
+  migrationsRun: false, // Disable automatic migrations - we run them manually
+  logging: true, // Enable logging to debug issues
+  synchronize: false, // Never use synchronize in production
 });
