@@ -370,7 +370,7 @@ export class LoanController {
         const groupRepository = AppDataSource.getRepository(Group);
 
         // Find groups where the user is a leader
-        let userGroups = [];
+        let userGroups: any[] = [];
 
         if (user.role?.name === "President") {
           const presidentGroups = await groupRepository.find({
@@ -540,9 +540,13 @@ export class LoanController {
       // Create verification record
       const verification = new LoanVerification();
       verification.loan = loan;
-      verification.member = await AppDataSource.getRepository(Member).findOne({
+      const member = await AppDataSource.getRepository(Member).findOne({
         where: { id: currentUser.id }
       });
+      if (!member) {
+        return next(new NotFoundError("Member not found"));
+      }
+      verification.member = member;
       verification.status = status;
       verification.notes = notes;
 
@@ -579,6 +583,10 @@ export class LoanController {
         where: { id: Number(recordId) },
         relations: ["verifications", "verifications.member", "group", "group.president", "group.accountant", "group.secretary"],
       });
+
+      if (!updatedLoan) {
+        return next(new NotFoundError("Loan not found"));
+      }
 
       res.status(200).json({
         status: "success",

@@ -79,11 +79,11 @@ async function createPresidentUser(params: CreatePresidentUserParams) {
             member.lastName = params.lastName;
             member.fullNames = `${params.firstName} ${params.lastName}`;
             member.gender = params.gender;
-            member.phone = params.phone;
+            member.phone = params.phone || '';
             member.marriageStatus = params.marriageStatus;
             member.idNumber = params.idNumber;
-            member.country = params.country;
-            member.currentAddress = params.currentAddress;
+            member.country = params.country || '';
+            member.currentAddress = params.currentAddress || '';
             member.sourceOfIncome = params.sourceOfIncome;
             member.joinedAt = params.joinedAt;
             member.branch = branch;
@@ -106,7 +106,7 @@ async function createPresidentUser(params: CreatePresidentUserParams) {
             user.last_name = params.lastName;
             user.email = params.email;
             user.password = hashedPassword;
-            user.phone = params.phone;
+            user.phone = params.phone || '';
             user.status = "active";
             user.role = presidentRole;
             user.branch = branch;

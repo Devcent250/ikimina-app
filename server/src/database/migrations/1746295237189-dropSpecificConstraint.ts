@@ -9,7 +9,7 @@ export class DropSpecificConstraint1746295237189 implements MigrationInterface {
             await queryRunner.query(`ALTER TABLE "loan_categories" DROP CONSTRAINT "FK_3ff57861742b5d7cd369a56ccc8"`);
             console.log('Successfully dropped constraint FK_3ff57861742b5d7cd369a56ccc8');
         } catch (error) {
-            console.log('Could not drop constraint FK_3ff57861742b5d7cd369a56ccc8:', error.message);
+            console.log('Could not drop constraint FK_3ff57861742b5d7cd369a56ccc8:', (error as Error).message);
         }
 
         // Make sure the branchId column is nullable
@@ -27,7 +27,7 @@ export class DropSpecificConstraint1746295237189 implements MigrationInterface {
             `);
             console.log('Successfully added new nullable constraint');
         } catch (error) {
-            console.log('Could not add new constraint:', error.message);
+            console.log('Could not add new constraint:', (error as Error).message);
         }
     }
 
@@ -36,7 +36,7 @@ export class DropSpecificConstraint1746295237189 implements MigrationInterface {
         try {
             await queryRunner.query(`ALTER TABLE "loan_categories" DROP CONSTRAINT "FK_loan_categories_branch_optional"`);
         } catch (error) {
-            console.log('Could not drop new constraint:', error.message);
+            console.log('Could not drop new constraint:', (error as Error).message);
         }
 
         // Make the column not nullable again
@@ -53,7 +53,7 @@ export class DropSpecificConstraint1746295237189 implements MigrationInterface {
                 ON UPDATE NO ACTION
             `);
         } catch (error) {
-            console.log('Could not recreate original constraint:', error.message);
+            console.log('Could not recreate original constraint:', (error as Error).message);
         }
     }
 } 

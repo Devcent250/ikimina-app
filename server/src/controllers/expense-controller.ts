@@ -106,20 +106,25 @@ export class ExpenseController {
         createdByUser = await AppDataSource.getRepository(User).findOne({ where: { id: req.user.id } });
       }
       // Create new expense
-      const newExpense = this.repository.create({
+      const expenseData: any = {
         group,
         season: currentSeason,
         expenseCategory,
         paymentMethod,
-        createdBy: createdByUser,
         amount,
         name,
         attachment,
         branch,
         notes,
-      });
+      };
 
-      const savedExpense = await this.repository.save(newExpense);
+      // Only add createdBy if it's not null
+      if (createdByUser) {
+        expenseData.createdBy = createdByUser;
+      }
+
+      const newExpense = this.repository.create(expenseData);
+      const savedExpense = await this.repository.save(newExpense) as any;
 
       res.status(201).json({
         status: "success",

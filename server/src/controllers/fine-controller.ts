@@ -105,7 +105,7 @@ export class FineController {
         createdByUser = await AppDataSource.getRepository(User).findOne({ where: { id: req.user.id } });
       }
       // Create new fine
-      const newFine = this.repository.create({
+      const fineData: any = {
         groupMember,
         group,
         contribution,
@@ -114,10 +114,15 @@ export class FineController {
         amount,
         branch,
         member: groupMember.member,
-        createdBy: createdByUser,
-      });
+      };
 
-      const savedFine = await this.repository.save(newFine);
+      // Only add createdBy if it's not null
+      if (createdByUser) {
+        fineData.createdBy = createdByUser;
+      }
+
+      const newFine = this.repository.create(fineData);
+      const savedFine = await this.repository.save(newFine) as any;
 
       res.status(201).json({
         status: "success",

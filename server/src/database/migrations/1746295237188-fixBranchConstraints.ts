@@ -21,7 +21,7 @@ export class FixBranchConstraints1746295237188 implements MigrationInterface {
                 await queryRunner.query(`ALTER TABLE "loan_categories" DROP CONSTRAINT "${constraint.constraint_name}"`);
                 console.log(`Dropped constraint: ${constraint.constraint_name}`);
             } catch (error) {
-                console.log(`Could not drop constraint ${constraint.constraint_name}:`, error.message);
+                console.log(`Could not drop constraint ${constraint.constraint_name}:`, (error as Error).message);
             }
         }
 

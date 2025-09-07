@@ -32,7 +32,7 @@ export interface CustomCondition {
   parameters?: ObjectLiteral;
 }
 
-export class QueryBuilder<T> {
+export class QueryBuilder<T extends ObjectLiteral> {
   constructor(
     private readonly repository: Repository<T>,
     private readonly options: QueryOptions
@@ -78,7 +78,7 @@ export class QueryBuilder<T> {
     if (params.page || params.cursor) {
       const lastItem = items[items.length - 1];
       const nextCursor = lastItem
-        ? Buffer.from(lastItem["id"].toString()).toString("base64")
+        ? Buffer.from((lastItem as any)["id"].toString()).toString("base64")
         : null;
 
       return {
@@ -88,7 +88,7 @@ export class QueryBuilder<T> {
         limit: params.limit || this.options.defaultLimit,
         hasMore: params.cursor
           ? items.length === params.limit
-          : (params.page || 1) * (params.limit || this.options.defaultLimit) <
+          : (params.page || 1) * (params.limit || this.options.defaultLimit || 10) <
           total,
         nextCursor,
       };
@@ -100,13 +100,13 @@ export class QueryBuilder<T> {
     }
   }
 
-  private applyNestedJoins(queryBuilder: SelectQueryBuilder<T>, nestedJoins) {
+  private applyNestedJoins(queryBuilder: SelectQueryBuilder<T>, nestedJoins: any) {
     // Ensure nested joins are defined
     if (!nestedJoins || nestedJoins.length === 0) {
       return;
     }
 
-    nestedJoins.forEach((join) => {
+    nestedJoins.forEach((join: any) => {
       const joinAlias = join.alias || join.path.split(".").pop();
       const joinType = join.type || "leftJoin";
 
@@ -119,13 +119,13 @@ export class QueryBuilder<T> {
 
       // Apply select for specific fields if provided
       if (join.select && join.select.length > 0) {
-        const selection = join.select.map((field) => `${joinAlias}.${field}`);
+        const selection = join.select.map((field: any) => `${joinAlias}.${field}`);
         queryBuilder.addSelect(selection);
       }
 
       // Apply additional conditions for the join if provided
       if (join.conditions && join.conditions.length > 0) {
-        join.conditions.forEach((condition) => {
+        join.conditions.forEach((condition: any) => {
           queryBuilder.andWhere(
             new Brackets((qb) => {
               qb.andWhere(condition.where, condition.parameters);
@@ -164,7 +164,7 @@ export class QueryBuilder<T> {
     if (search && this.options.searchableFields?.length) {
       queryBuilder.andWhere(
         new Brackets((qb) => {
-          this.options.searchableFields.forEach((field, i) => {
+          this.options.searchableFields!.forEach((field, i) => {
             qb.orWhere(`${alias}.${field} ILIKE :search`, {
               search: `%${search}%`,
             });
@@ -184,7 +184,7 @@ export class QueryBuilder<T> {
     // Apply filters with brackets
     if (filters?.length && this.options.filterableFields?.length) {
       filters.forEach((filter, index) => {
-        if (this.options.filterableFields.includes(filter.field)) {
+        if (this.options.filterableFields!.includes(filter.field)) {
           const paramName = `filter${index}`;
 
           switch (filter.operator) {
@@ -283,11 +283,11 @@ export class QueryBuilder<T> {
       const decodedCursor = Buffer.from(cursor, "base64").toString("ascii");
       queryBuilder.andWhere(`${alias}.id > :cursor`, { cursor: decodedCursor });
     } else if (page) {
-      queryBuilder.skip((page - 1) * limit);
+      queryBuilder.skip((page - 1) * limit!);
     }
 
     // Apply limit
-    const finalLimit = Math.min(limit, this.options.maxLimit);
+    const finalLimit = Math.min(limit!, this.options.maxLimit || 100);
     queryBuilder.take(finalLimit);
 
     return queryBuilder;

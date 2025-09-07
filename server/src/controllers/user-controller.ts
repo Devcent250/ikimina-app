@@ -175,6 +175,10 @@ export class UserController {
         relations: ["role", "branch", "group"]
       });
 
+      if (!refreshedUser) {
+        return next(new NotFoundError("User not found"));
+      }
+
       res.status(200).json({
         status: "success",
         data: this.format(refreshedUser),
@@ -198,14 +202,14 @@ export class UserController {
       const members = await memberRepo.find({ where: emails.map(email => ({ email })) });
       // Get all groups with their leaders
       const groups = await groupRepo.find({ relations: ["president", "accountant", "secretary"] });
-      const memberIdToLeaderRole = {};
+      const memberIdToLeaderRole: any = {};
       groups.forEach(group => {
         if (group.president) memberIdToLeaderRole[group.president.id] = "President";
         if (group.accountant) memberIdToLeaderRole[group.accountant.id] = "Accountant";
         if (group.secretary) memberIdToLeaderRole[group.secretary.id] = "Secretary";
       });
       // Map users to displayRole
-      const emailToMember = {};
+      const emailToMember: any = {};
       members.forEach(m => { emailToMember[m.email] = m; });
       const formatted = users.map(u => {
         let displayRole = null;

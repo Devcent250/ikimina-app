@@ -168,17 +168,22 @@ export class GroupController {
       }
 
       // Create basic group with minimal information
-      const newGroup = this.repository.create({
+      const groupData: any = {
         name,
         description,
         branch,
         isActive,
         additionalNotes,
         meetingFrequency: "Monthly", // Default value
-        president, // Assign president if provided
-      });
+      };
 
-      const savedGroup = await this.repository.save(newGroup);
+      // Only add president if it's not null
+      if (president) {
+        groupData.president = president;
+      }
+
+      const newGroup = this.repository.create(groupData);
+      const savedGroup = await this.repository.save(newGroup) as any;
 
       // If president was assigned, add them as a group member automatically
       if (president) {
@@ -658,7 +663,7 @@ export class GroupController {
       );
 
       // Create new group
-      const newGroup = this.repository.create({
+      const groupData: any = {
         name,
         description,
         president,
@@ -678,9 +683,11 @@ export class GroupController {
         branch,
         solidarityAmount,
         additionalNotes,
-      });
+      };
 
-      const savedGroup = await this.repository.save(newGroup);
+      const newGroup = this.repository.create(groupData);
+
+      const savedGroup = await this.repository.save(newGroup) as any;
 
       res.status(201).json({
         status: "success",
