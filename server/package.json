@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node dist/index.js",
     "start:prod": "npm run build && node dist/index.js",
-    "start:migrate": "npm run migration:run && npm run start",
+    "start:migrate": "npm run build && npm run migration:run:prod && npm run start",
+    "migration:run:prod": "NODE_ENV=production npx typeorm migration:run -d ./dist/data-source.js",
     "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node --files src/index.ts",
     "typeorm": "typeorm-ts-node-commonjs",
     "build": "tsc",
