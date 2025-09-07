@@ -25,18 +25,37 @@ export class FixBranchConstraints1746295237188 implements MigrationInterface {
             }
         }
 
-        // Make the branchId column nullable
-        await queryRunner.query(`ALTER TABLE "loan_categories" ALTER COLUMN "branchId" DROP NOT NULL`);
+        // Make the branchId column nullable (only if it's currently not null)
+        try {
+            const columnInfo = await queryRunner.query(`
+                SELECT is_nullable
+                FROM information_schema.columns
+                WHERE table_name = 'loan_categories'
+                AND column_name = 'branchId'
+            `);
 
-        // Add a new foreign key constraint that allows NULL values
-        await queryRunner.query(`
-            ALTER TABLE "loan_categories" 
-            ADD CONSTRAINT "FK_loan_categories_branch_nullable" 
-            FOREIGN KEY ("branchId") 
-            REFERENCES "branches"("id") 
-            ON DELETE SET NULL 
-            ON UPDATE CASCADE
-        `);
+            if (columnInfo.length > 0 && columnInfo[0].is_nullable === 'NO') {
+                await queryRunner.query(`ALTER TABLE "loan_categories" ALTER COLUMN "branchId" DROP NOT NULL`);
+                console.log('Made branchId column nullable');
+            }
+        } catch (error) {
+            console.log('Could not make branchId nullable:', (error as Error).message);
+        }
+
+        // Add a new foreign key constraint that allows NULL values (if it doesn't exist)
+        try {
+            await queryRunner.query(`
+                ALTER TABLE "loan_categories"
+                ADD CONSTRAINT "FK_loan_categories_branch_nullable"
+                FOREIGN KEY ("branchId")
+                REFERENCES "branches"("id")
+                ON DELETE SET NULL
+                ON UPDATE CASCADE
+            `);
+            console.log('Added new nullable foreign key constraint');
+        } catch (error) {
+            console.log('Could not add new constraint:', (error as Error).message);
+        }
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
