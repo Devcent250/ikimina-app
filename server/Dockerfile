@@ -34,6 +34,9 @@ COPY --from=build /app/dist ./dist
 # Set production environment
 ENV NODE_ENV=production
 
+# Debug: Print environment variables
+RUN echo "NODE_ENV: $NODE_ENV"
+
 EXPOSE 4000
 
 CMD ["npm", "start"]
