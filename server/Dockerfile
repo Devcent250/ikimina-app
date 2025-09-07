@@ -22,19 +22,19 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy only package.json to install production deps
+# Copy only package.json to install production deps + typeorm for migrations
 COPY package*.json ./
 
-RUN npm install --production
+# Install production deps + typeorm CLI for migrations
+RUN npm install --production && npm install typeorm
 
 # Copy built JS from build stage
 COPY --from=build /app/dist ./dist
 
-# Copy anything else needed (e.g., migrations, seeds)
-COPY --from=build /app/src/database ./src/database
-COPY --from=build /app/src/scripts ./src/scripts
+# Set production environment
+ENV NODE_ENV=production
 
 EXPOSE 4000
 
-CMD ["npm", "run", "start:migrate"]
+CMD ["npm", "start"]
 
