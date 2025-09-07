@@ -1,13 +1,13 @@
-# Frontend Dockerfile for Railway (React + Nginx)
+# Frontend Dockerfile for Railway (React + Node.js serve)
 
-# Stage 1: Build React app
-FROM node:20-alpine as build
+FROM node:20-alpine
 
 WORKDIR /app
 
 # Copy dependency files
 COPY package*.json ./
 
+# Install dependencies including serve
 RUN npm install
 
 # Copy rest of the app
@@ -16,15 +16,11 @@ COPY . .
 # Build React for production
 RUN npm run build
 
-# Stage 2: Serve with Nginx
-FROM nginx:alpine
+# Set production environment
+ENV NODE_ENV=production
 
-# Copy build files to Nginx web root
-COPY --from=build /app/build /usr/share/nginx/html
+# Expose port (Railway will set PORT automatically)
+EXPOSE 3000
 
-# Optional: custom Nginx config for SPA routing
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+# Use serve to host the built React app with SPA routing
+CMD ["npm", "start"]
