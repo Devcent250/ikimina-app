@@ -22,6 +22,13 @@ import { District } from "./entities/District";
 import { LoanCategory } from "./entities/LoanCategory";
 dotenv.config();
 
+// Debug logging
+console.log("🔍 NODE_ENV:", process.env.NODE_ENV);
+console.log("🔍 DATABASE_URL:", process.env.DATABASE_URL ? "SET" : "NOT SET");
+if (process.env.DATABASE_URL) {
+  console.log("🔍 DATABASE_URL starts with:", process.env.DATABASE_URL.substring(0, 20) + "...");
+}
+
 export const MIGRATION_FILES =
   process.env.NODE_ENV === "development"
     ? ["./src/database/migrations/*.ts"]
