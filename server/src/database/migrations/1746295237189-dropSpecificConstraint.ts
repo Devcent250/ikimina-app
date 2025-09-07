@@ -12,8 +12,24 @@ export class DropSpecificConstraint1746295237189 implements MigrationInterface {
             console.log('Could not drop constraint FK_3ff57861742b5d7cd369a56ccc8:', (error as Error).message);
         }
 
-        // Make sure the branchId column is nullable
-        await queryRunner.query(`ALTER TABLE "loan_categories" ALTER COLUMN "branchId" DROP NOT NULL`);
+        // Make sure the branchId column is nullable (only if it's currently not null)
+        try {
+            const columnInfo = await queryRunner.query(`
+                SELECT is_nullable
+                FROM information_schema.columns
+                WHERE table_name = 'loan_categories'
+                AND column_name = 'branchId'
+            `);
+
+            if (columnInfo.length > 0 && columnInfo[0].is_nullable === 'NO') {
+                await queryRunner.query(`ALTER TABLE "loan_categories" ALTER COLUMN "branchId" DROP NOT NULL`);
+                console.log('Successfully made branchId column nullable');
+            } else {
+                console.log('branchId column is already nullable or does not exist');
+            }
+        } catch (error) {
+            console.log('Could not make branchId nullable:', (error as Error).message);
+        }
 
         // Add a new constraint that allows NULL values
         try {
