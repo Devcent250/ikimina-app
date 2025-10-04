@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "vite",
     "start": "serve -s dist -l 3000",
+    "preview": "vite preview --port 3000",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@hookform/resolvers": "^4.0.0",
