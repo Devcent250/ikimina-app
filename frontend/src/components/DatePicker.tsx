@@ -2,13 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import endOfMonth from "date-fns/endOfMonth";
-import endOfYear from "date-fns/endOfYear";
-import startOfMonth from "date-fns/startOfMonth";
-import startOfYear from "date-fns/startOfYear";
-import subDays from "date-fns/subDays";
-import subMonths from "date-fns/subMonths";
-import subYears from "date-fns/subYears";
+import { endOfMonth, endOfYear, startOfMonth, startOfYear, subDays, subMonths, subYears } from "date-fns";
 import { useState } from "react";
 
 export default function DatePickerAdvance({ date, setDate }) {

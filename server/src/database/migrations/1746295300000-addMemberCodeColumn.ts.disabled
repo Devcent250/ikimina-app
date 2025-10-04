@@ -19,10 +19,10 @@ export class AddMemberCodeColumn1746295300000 implements MigrationInterface {
             `);
         }
 
-        // Generate unique member codes for existing records
+        // Generate unique member codes for existing records (PostgreSQL compatible)
         await queryRunner.query(`
-            UPDATE members 
-            SET "memberCode" = LPAD(CAST(id AS VARCHAR), 4, '0')
+            UPDATE members
+            SET "memberCode" = LPAD(id::text, 4, '0')
             WHERE "memberCode" IS NULL;
         `);
 

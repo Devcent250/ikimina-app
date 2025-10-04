@@ -22,6 +22,21 @@ import { District } from "./entities/District";
 import { LoanCategory } from "./entities/LoanCategory";
 dotenv.config();
 
+// Debug logging
+console.log("🔍 NODE_ENV:", process.env.NODE_ENV);
+console.log("🔍 DATABASE_URL:", process.env.DATABASE_URL ? "SET" : "NOT SET");
+if (process.env.DATABASE_URL) {
+  console.log("🔍 DATABASE_URL starts with:", process.env.DATABASE_URL.substring(0, 20) + "...");
+} else {
+  console.error("❌ DATABASE_URL is not set! This will cause connection to fail.");
+  console.log("🔍 Available env vars:", Object.keys(process.env).filter(key => key.includes('DATABASE')));
+}
+
+// Validate DATABASE_URL
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL environment variable is required but not set");
+}
+
 export const MIGRATION_FILES =
   process.env.NODE_ENV === "development"
     ? ["./src/database/migrations/*.ts"]
@@ -48,15 +63,12 @@ export const AppDataSource = new DataSource({
     LoanPayment,
     LoanVerification,
     Member,
-    PasswordReset,
     PaymentMethod,
-    RefreshToken,
     Role,
     Season,
-    User,
   ],
   migrations: MIGRATION_FILES,
-  migrationsRun: true, // Enable migrations to run automatically
-  logging: false,
-  synchronize: process.env.NODE_ENV === "development", // Re-enabled after fixing memberCode issue
+  migrationsRun: false, // Disable automatic migrations - we run them manually
+  logging: true, // Enable logging to debug issues
+  synchronize: false, // Never use synchronize in production
 });

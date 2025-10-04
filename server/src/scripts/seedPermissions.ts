@@ -46,9 +46,9 @@ async function seedAdminUser() {
     
     if (!adminExists) {
       console.log("Admin user not found, creating...");
-      const adminPassword = process.env.ADMIN_PASSWORD;
+      const adminPassword = process.env.ADMIN_PASSWORD || 'defaultPassword123';
       const hashedPassword = await bcrypt.hash(adminPassword, 10);
-      
+
       const admin = new User();
       admin.name = "Administrator";
       admin.email = adminEmail;

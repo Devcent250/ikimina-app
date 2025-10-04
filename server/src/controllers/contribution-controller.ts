@@ -176,7 +176,7 @@ export class ContributionController {
         beforeSolidalityAmount + Number(solidarityAmount);
 
       // Create new contribution
-      const newContribution = this.repository.create({
+      const contributionData: any = {
         member: groupMember.member,
         groupMember,
         season: currentSeason,
@@ -188,13 +188,18 @@ export class ContributionController {
         beforeSolidalityAmount,
         group: groupMember.group,
         paymentMethod,
-        receivedBy,
         branch: branch,
         documentReceipt,
         transactionId,
-      });
+      };
 
-      const savedContribution = await this.repository.save(newContribution);
+      // Only add receivedBy if it's not null
+      if (receivedBy) {
+        contributionData.receivedBy = receivedBy;
+      }
+
+      const newContribution = this.repository.create(contributionData);
+      const savedContribution = await this.repository.save(newContribution) as any;
 
       res.status(201).json({
         status: "success",
@@ -448,7 +453,7 @@ export class ContributionController {
         const groupRepository = AppDataSource.getRepository(Group);
 
         // Find groups where the user is a leader
-        let userGroups = [];
+        let userGroups: any[] = [];
 
         if (user.role?.name === "President") {
           const presidentGroups = await groupRepository.find({

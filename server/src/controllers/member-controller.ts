@@ -250,6 +250,10 @@ export class MemberController {
         relations: ["branch", "branch.district", "groupMemberships", "groupMemberships.group", "groupMemberships.branch"]
       });
 
+      if (!memberWithRelations) {
+        return next(new NotFoundError("Member not found"));
+      }
+
       res.status(201).json({
         status: "success",
         data: await this.format(memberWithRelations),
@@ -409,6 +413,10 @@ export class MemberController {
         relations: ["branch", "groupMemberships", "groupMemberships.group"]
       });
 
+      if (!refreshedMember) {
+        return next(new NotFoundError("Member not found"));
+      }
+
       res.status(200).json({
         status: "success",
         data: await this.format(refreshedMember),
@@ -482,7 +490,7 @@ export class MemberController {
         const groupRepository = AppDataSource.getRepository(Group);
 
         // Find groups where the user is a leader
-        let userGroups = [];
+        let userGroups: any[] = [];
 
         if (user.role?.name === "President") {
           const presidentGroups = await groupRepository.find({
@@ -643,10 +651,10 @@ export class MemberController {
           const csv = fs.readFileSync(file.path, 'utf8');
           const [headerLine, ...lines] = csv.split(/\r?\n/).filter(Boolean);
           const headers = headerLine.split(',');
-          rows = lines.map(line => {
+          rows = lines.map((line: string) => {
             const values = line.split(',');
-            const obj = {};
-            headers.forEach((h, i) => { obj[h.trim()] = values[i]?.trim() || ''; });
+            const obj: any = {};
+            headers.forEach((h: string, i: number) => { obj[h.trim()] = values[i]?.trim() || ''; });
             return obj;
           });
         } else {
@@ -686,7 +694,7 @@ export class MemberController {
           };
           // Validation for required fields
           const required = ["memberCode", "fullNames", "firstName", "lastName", "idNumber", "branchId", "districtId", "joinedAt"];
-          const missing = required.filter(f => !memberData[f]);
+          const missing = required.filter(f => !(memberData as any)[f]);
           if (missing.length) {
             errors.push({ line: i + 2, error: `Missing required fields: ${missing.join(', ')}` });
             continue;
@@ -696,7 +704,7 @@ export class MemberController {
             await this.repository.save(member);
             inserted.push(member);
           } catch (err) {
-            errors.push({ line: i + 2, error: err.message });
+            errors.push({ line: i + 2, error: (err as Error).message });
           }
         }
 

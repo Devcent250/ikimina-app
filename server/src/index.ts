@@ -197,12 +197,20 @@ AppDataSource.initialize()
 
     if (process.env.NODE_ENV === "production") {
       console.log("🚀 Running migrations...");
-      await AppDataSource.runMigrations()
-        .then(() => console.log("✅ Migrations complete"))
-        .catch((err) => {
-          console.error("❌ Migration failed", err);
-          process.exit(1);
+      try {
+        const migrations = await AppDataSource.runMigrations();
+        console.log(`✅ Migrations complete. Executed ${migrations.length} migrations.`);
+        migrations.forEach(migration => {
+          console.log(`  - ${migration.name}`);
         });
+      } catch (err) {
+        console.error("❌ Migration failed:", err);
+        console.error("Migration error details:", {
+          message: (err as Error).message,
+          stack: (err as Error).stack
+        });
+        process.exit(1);
+      }
     }
 
     app.listen(PORT, () => {

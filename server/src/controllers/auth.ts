@@ -177,7 +177,13 @@ export class AuthController {
         };
 
         console.log("Login - Final memberObj being sent:", JSON.stringify(memberObj, null, 2));
-        const access_token = jwt.sign(memberObj, process.env.JWT_SECRET, {
+
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+          throw new Error("JWT_SECRET environment variable is not set");
+        }
+
+        const access_token = jwt.sign(memberObj, jwtSecret, {
           expiresIn: "7h",
         });
         // Optionally, you can implement refresh tokens for members as well
@@ -220,10 +226,15 @@ export class AuthController {
           isAdmin: user.isAdmin,
           type: "user",
         };
-        const access_token = jwt.sign(userObj, process.env.JWT_SECRET, {
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+          throw new Error("JWT_SECRET environment variable is not set");
+        }
+
+        const access_token = jwt.sign(userObj, jwtSecret, {
           expiresIn: "7h",
         });
-        const refresh_token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+        const refresh_token = jwt.sign({ id: user.id }, jwtSecret, {
           expiresIn: "7d",
         });
         const refreshTokenRepository = AppDataSource.getRepository(RefreshToken);
