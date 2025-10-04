@@ -35,7 +35,7 @@ import loanCategoryRoutes from "./routes/loan-category.routes";
 dotenv.config();
 
 const delayMiddleware = (_: any, __: any, next: any) => {
-  const delay = Math.floor(Math.random() * 500) + 200; // Random delay between 300ms to 1s
+  const delay = Math.floor(Math.random() * 500) + 200;
   setTimeout(() => {
     next();
   }, delay);
@@ -59,12 +59,19 @@ app.use(express.static("public"));
 // Serve uploaded files
 app.use("/uploads", express.static(path.join(__dirname, "..", "public", "uploads")));
 
-if (process.env.NODE_ENV === "production") {
-  // Serve static files from the React app
-  app.use(express.static(path.join(__dirname, "../client")));
-}
+// REMOVED: React static file serving since we have separate frontend service
 
 app.use("/api/auth", authRoutes);
+
+// Health check endpoint
+app.get("/", (req, res) => {
+  res.json({ 
+    message: 'Backend API Server is running', 
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
+});
 
 // Test endpoint to verify server is working
 app.get("/api/test", (req, res) => {
@@ -123,7 +130,6 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
-    // Generate a unique filename
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     cb(
       null,
@@ -134,59 +140,33 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-app.use("/api/auth", authRoutes);
-
-// Single endpoint for file upload
+// Single endpoint for file upload (REMOVED DUPLICATE)
 app.post("/api/upload", upload.single("file"), (req: any, res: Response) => {
   if (!req.file) {
     throw new BadRequestError("No file uploaded.");
   }
 
-  // Generate the public URL for the uploaded file
   const fileUrl = `/uploads/${req.file.filename}`;
 
-  // Return the file URL and any additional data
   res.json({
     message: "File uploaded successfully",
     fileUrl: fileUrl,
-    additionalData: req.body, // Any additional form data sent with the request
+    additionalData: req.body,
   });
 });
 
-if (process.env.NODE_ENV === "production") {
-  // For any request that doesn't match the above, send back React's index.html file
-  app.get("*", (_: Request, res: Response) => {
-    res.sendFile(path.join(__dirname, "../client", "index.html"));
-  });
-} else {
-  app.get("*", (req: Request, res: Response) => {
-    res.status(404).json({ message: "Route not found" });
-  });
-}
+// REMOVED: React catch-all route since we have separate frontend service
 
-// Single endpoint for file upload
-app.post(
-  "/api/upload",
-  upload.single("file"),
-  (req: Request, res: Response): void => {
-    // @ts-ignore
-    if (!req.file) {
-      res.status(400).json({ error: "No file uploaded." });
-    }
-    // Generate the public URL for the uploaded file
-    // @ts-ignore
-    const fileUrl = `/uploads/${req.file.filename}`;
-    // Return the file URL and any additional data
-    res.json({
-      message: "File uploaded successfully",
-      fileUrl: fileUrl,
-      additionalData: req.body, // Any additional form data sent with the request
-    });
-  }
-);
+// Handle undefined routes
+app.use("*", (req: Request, res: Response) => {
+  res.status(404).json({ 
+    message: "Route not found",
+    path: req.originalUrl,
+    method: req.method
+  });
+});
 
 // Error handling middleware
-// @ts-ignore
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
