@@ -90,6 +90,16 @@ app.get("/", (req, res) => {
   });
 });
 
+// Health check for load balancers/orchestrators
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    service: 'ikimina-backend'
+  });
+});
+
 // Test endpoint to verify server is working
 app.get("/api/test", (req, res) => {
   res.json({ message: "Server is running", timestamp: new Date().toISOString() });
@@ -212,8 +222,22 @@ AppDataSource.initialize()
 
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🌐 Health check available at: /health`);
+      console.log(`📊 API endpoints available at: /api/*`);
+    });
+
+    // Graceful shutdown handling
+    process.on('SIGTERM', () => {
+      console.log('🛑 SIGTERM received, shutting down gracefully...');
+      process.exit(0);
+    });
+
+    process.on('SIGINT', () => {
+      console.log('🛑 SIGINT received, shutting down gracefully...');
+      process.exit(0);
     });
   })
   .catch((error) => {
     console.error("❌ Data Source initialization failed", error);
+    process.exit(1);
   });
