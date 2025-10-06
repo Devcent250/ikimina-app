@@ -1,0 +1,11 @@
+node_modules
+npm-debug.log
+dist
+*.log
+.env
+.DS_Store
+.git
+.gitignore
+README.md
+client
+# Don't copy client folder - we're serving frontend separately

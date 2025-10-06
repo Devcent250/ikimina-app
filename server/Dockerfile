@@ -1,4 +1,4 @@
-# Backend Dockerfile for Railway (TypeScript + Node.js)
+# Backend Dockerfile for Dokploy deployment (TypeScript + Node.js)
 
 # Stage 1: Build
 FROM node:20-alpine as build
@@ -12,7 +12,7 @@ COPY package*.json tsconfig.json ./
 RUN npm install
 
 # Copy source
-COPY . .
+COPY src ./src
 
 # Build TS → JS
 RUN npm run build
@@ -30,6 +30,9 @@ RUN npm install --production && npm install typeorm
 
 # Copy built JS from build stage
 COPY --from=build /app/dist ./dist
+
+# Copy public directory for static file serving
+COPY public ./public
 
 # Set production environment
 ENV NODE_ENV=production

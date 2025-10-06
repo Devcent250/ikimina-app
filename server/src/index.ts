@@ -34,6 +34,17 @@ import loanCategoryRoutes from "./routes/loan-category.routes";
 
 dotenv.config();
 
+// Log environment variables for debugging
+console.log("🔍 NODE_ENV:", process.env.NODE_ENV);
+if (process.env.DATABASE_URL) {
+  console.log("🔍 DATABASE_URL: SET");
+  console.log("🔍 DATABASE_URL starts with:", process.env.DATABASE_URL.substring(0, 15) + "...");
+} else {
+  console.log("❌ DATABASE_URL: NOT SET");
+}
+console.log("🔍 FRONTEND_URL:", process.env.FRONTEND_URL);
+console.log("🔍 PORT:", process.env.PORT || 5000);
+
 const delayMiddleware = (_: any, __: any, next: any) => {
   const delay = Math.floor(Math.random() * 500) + 200;
   setTimeout(() => {
@@ -44,7 +55,10 @@ const delayMiddleware = (_: any, __: any, next: any) => {
 const app = express();
 
 app.use(cors({
-  origin: "*"
+  origin: process.env.NODE_ENV === "production" 
+    ? process.env.FRONTEND_URL || "https://vjnikibina.infinityconect.com"
+    : "*",
+  credentials: true
 }));
 app.use(express.json());
 app.use(morgan("tiny"));
@@ -66,10 +80,13 @@ app.use("/api/auth", authRoutes);
 // Health check endpoint
 app.get("/", (req, res) => {
   res.json({ 
-    message: 'Backend API Server is running', 
+    message: 'Ikimina Backend API Server is running', 
     status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    version: '1.0.0',
+    service: 'main-ikimina-backend',
+    port: process.env.PORT || 5000
   });
 });
 
@@ -166,8 +183,8 @@ app.use("*", (req: Request, res: Response) => {
   });
 });
 
-// Error handling middleware
-app.use(errorHandler);
+// Error handling middleware (must be last)
+app.use(errorHandler as any);
 
 const PORT = process.env.PORT || 5000;
 

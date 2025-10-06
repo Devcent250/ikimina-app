@@ -117,8 +117,8 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-// Error handling middleware
-app.use(errorHandler);
+// Error handling middleware (must be last)
+app.use(errorHandler as any);
 
 const PORT = process.env.PORT || 5001;
 
