@@ -56,9 +56,11 @@ const app = express();
 
 app.use(cors({
   origin: process.env.NODE_ENV === "production" 
-    ? process.env.FRONTEND_URL || "https://vjnikibina.infinityconect.com"
-    : "*",
-  credentials: true
+    ? ['https://ikimina-frontend.onrender.com', process.env.FRONTEND_URL || "https://vjnikibina.infinityconect.com"]
+    : ["http://localhost:3000", "http://localhost:5173", "*"],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-organization-id']
 }));
 app.use(express.json());
 app.use(morgan("tiny"));

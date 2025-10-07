@@ -13,7 +13,8 @@ class AuthService {
   private user: User | null = null;
 
   constructor() {
-    const apiUrl = import.meta.env.VITE_PUBLIC_API_URL || 'http://localhost:4000';
+    const apiUrl = import.meta.env.VITE_PUBLIC_API_URL || 
+      (import.meta.env.PROD ? 'https://ikimina-backend.onrender.com' : 'http://localhost:4000');
     this.api = axios.create({
       baseURL: apiUrl + "/api",
       headers: {

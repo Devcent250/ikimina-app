@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: ikimina-backend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://ikimina_db_r107_user:V2qgPe0gjgsM1htjBD6sdv7UZ6u00lV2@dpg-d3iak2adbo4c73fina00-a.oregon-postgres.render.com/ikimina_db_r107
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://ikimina-frontend.onrender.com
