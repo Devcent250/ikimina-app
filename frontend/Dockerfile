@@ -1,33 +1,38 @@
 # Multi-stage build for React app
-FROM node:18-alpine as build
+FROM node:20-alpine as build
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies (including dev dependencies for build)
+# Install all dependencies
 RUN npm ci
 
-# Copy source code
+# Copy source code (excluding .env.local via .dockerignore)
 COPY . .
+
+# Set default API URL if not provided
+ARG VITE_PUBLIC_API_URL=https://vjn.infinityconect.com
+ENV VITE_PUBLIC_API_URL=$VITE_PUBLIC_API_URL
+
+# Debug: Print the environment variable
+RUN echo "🔍 Building with VITE_PUBLIC_API_URL: $VITE_PUBLIC_API_URL"
 
 # Build the app
 RUN npm run build
 
-# Production stage
-FROM node:18-alpine
+# Production stage - Use nginx for better performance
+FROM nginx:alpine
 
-WORKDIR /app
+# Copy built app to nginx
+COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy package files for production dependencies
-COPY package*.json ./
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Install only production dependencies
-RUN npm ci --only=production
+# Expose port 80
+EXPOSE 80
 
-# Copy built app from build stage
-COPY --from=build /app/dist ./dist
-
-# Start the app
-CMD ["npm", "start"]
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
