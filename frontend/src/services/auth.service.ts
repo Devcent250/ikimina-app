@@ -13,8 +13,9 @@ class AuthService {
   private user: User | null = null;
 
   constructor() {
+    const apiUrl = import.meta.env.VITE_PUBLIC_API_URL || 'http://localhost:4000';
     this.api = axios.create({
-      baseURL: import.meta.env.VITE_PUBLIC_API_URL + "/api",
+      baseURL: apiUrl + "/api",
       headers: {
         "Content-Type": "application/json",
       },

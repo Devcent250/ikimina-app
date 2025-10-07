@@ -1,7 +1,7 @@
 import authService from "@/services/auth.service";
 import axios from "axios";
 
-export const PUBLIC_API_URL = import.meta.env.VITE_PUBLIC_API_URL as string;
+export const PUBLIC_API_URL = import.meta.env.VITE_PUBLIC_API_URL || 'http://localhost:4000';
 
 // Debug: Log the API URL being used
 console.log("🔍 Frontend API Configuration:");
