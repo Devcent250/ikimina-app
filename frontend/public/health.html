@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Health Check</title>
+</head>
+<body>
+    <h1>Frontend is running</h1>
+    <p>Status: OK</p>
+    <p>Time: <span id="time"></span></p>
+    <script>
+        document.getElementById('time').textContent = new Date().toISOString();
+    </script>
+</body>
+</html>

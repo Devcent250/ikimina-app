@@ -26,12 +26,14 @@ RUN echo "🔍 All VITE environment variables:" && env | grep VITE || echo "No V
 # Build the app with environment variables baked in
 RUN npm run build
 
-# Debug: Verify build output
+# Debug: Verify build output and check what API URL was baked in
 RUN echo "🔍 Build completed. Checking built files..." && \
     ls -la dist/ && \
     echo "🔍 Checking for API URL in build:" && \
     (grep -r "vjn.infinityconect.com" dist/ || echo "❌ Production API URL not found") && \
-    (grep -r "localhost:4000" dist/ || echo "✅ No localhost URLs found")
+    (grep -r "localhost:4000" dist/ || echo "✅ No localhost URLs found") && \
+    echo "🔍 Checking index.html content:" && \
+    head -20 dist/index.html
 
 # Production stage - Use Node.js serve (more stable than nginx for simple apps)
 FROM node:20-alpine

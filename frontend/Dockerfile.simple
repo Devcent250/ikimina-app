@@ -1,0 +1,46 @@
+# Ultra-simple frontend Dockerfile for troubleshooting
+FROM node:20-alpine as build
+
+WORKDIR /app
+
+# Copy everything
+COPY package*.json ./
+RUN npm ci
+
+# Copy source and set environment variable
+COPY . .
+ENV VITE_PUBLIC_API_URL=https://vjn.infinityconect.com
+
+# Debug environment
+RUN echo "🔍 Environment during build:" && env | grep VITE
+
+# Build
+RUN npm run build
+
+# Debug what was built
+RUN echo "🔍 Built files:" && ls -la dist/ && \
+    echo "🔍 Searching for API URL:" && \
+    find dist/ -name "*.js" -exec grep -l "vjn.infinityconect.com" {} \; || \
+    echo "❌ API URL not found in JS files"
+
+# Production - super simple
+FROM nginx:alpine
+
+# Copy built files
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Simple nginx config
+RUN echo 'server { \
+    listen 80; \
+    location / { \
+        root /usr/share/nginx/html; \
+        try_files $uri $uri/ /index.html; \
+    } \
+    location /health { \
+        return 200 "OK"; \
+        add_header Content-Type text/plain; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
