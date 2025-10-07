@@ -40,11 +40,12 @@ if (!process.env.DATABASE_URL) {
 export const MIGRATION_FILES =
   process.env.NODE_ENV === "development"
     ? ["./src/database/migrations/*.ts"]
-    : ["./dist/database/migrations/*.js"];
+    : []; // Empty array for production to avoid migration import issues
 
 export const AppDataSource = new DataSource({
   type: "postgres",
   url: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
   entities: [
     User,
     PasswordReset,
