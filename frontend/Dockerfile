@@ -44,12 +44,16 @@ COPY --from=build /app/dist ./dist
 # Add wget for health checks
 RUN apk add --no-cache wget
 
+# Make port configurable
+ARG PORT=3000
+ENV PORT=$PORT
+
 # Add health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:$PORT/ || exit 1
 
-# Expose port 3000
-EXPOSE 3000
+# Expose the configured port
+EXPOSE $PORT
 
-# Start the app with serve
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Start the app with serve on the configured port
+CMD ["sh", "-c", "echo '🚀 Starting frontend on port' $PORT && serve -s dist -l $PORT"]
