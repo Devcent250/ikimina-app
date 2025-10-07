@@ -30,24 +30,26 @@ RUN echo "🔍 Build completed. Checking built files..." && \
     (grep -r "vjn.infinityconect.com" dist/ || echo "❌ Production API URL not found") && \
     (grep -r "localhost:4000" dist/ || echo "✅ No localhost URLs found")
 
-# Production stage - Use nginx for better performance
-FROM nginx:alpine
+# Production stage - Use Node.js serve (more stable than nginx for simple apps)
+FROM node:20-alpine
 
-# Copy built app to nginx
-COPY --from=build /app/dist /usr/share/nginx/html
+WORKDIR /app
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Install serve globally
+RUN npm install -g serve
 
-# Add curl for health checks
-RUN apk add --no-cache curl
+# Copy built app from build stage
+COPY --from=build /app/dist ./dist
+
+# Add wget for health checks
+RUN apk add --no-cache wget
 
 # Add health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost/nginx-status || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
-# Expose port 80
-EXPOSE 80
+# Expose port 3000
+EXPOSE 3000
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start the app with serve
+CMD ["serve", "-s", "dist", "-l", "3000"]

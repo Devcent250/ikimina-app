@@ -1,0 +1,44 @@
+# Simple Node.js serve approach for frontend
+FROM node:20-alpine as build
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Set build-time environment variable
+ARG VITE_PUBLIC_API_URL=https://vjn.infinityconect.com
+ENV VITE_PUBLIC_API_URL=$VITE_PUBLIC_API_URL
+
+# Debug build
+RUN echo "🔍 Building with VITE_PUBLIC_API_URL: $VITE_PUBLIC_API_URL"
+
+# Build the app
+RUN npm run build
+
+# Production stage
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install serve globally
+RUN npm install -g serve
+
+# Copy built app
+COPY --from=build /app/dist ./dist
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+
+# Expose port 3000
+EXPOSE 3000
+
+# Start the app
+CMD ["serve", "-s", "dist", "-l", "3000"]
